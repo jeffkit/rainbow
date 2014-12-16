@@ -234,7 +234,6 @@ class WebSocketHandler(Handler):
         if packet.message_id in self.pendding_message_ids:
             self.pendding_message_ids.remove(packet.message_id)
 
-    @return_future
     def send_packet(self, packet):
         """此方法需要返回Future
         """

@@ -1,9 +1,10 @@
 #encoding=utf-8
 
 import tornado.web
-from tornado import gen
-from tornado.concurrent import return_future
+from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler
+
+import time
 
 
 class SendMessageHandler(tornado.web.RequestHandler):
@@ -11,7 +12,7 @@ class SendMessageHandler(tornado.web.RequestHandler):
     def get(self):
         self.write('hello world')
 
-    @gen.coroutine
+    @tornado.web.asynchronous
     def post(self):
         """接受来自业务服务器的消息，发送给客户端。
         - uid: 用户唯一ID
@@ -20,33 +21,38 @@ class SendMessageHandler(tornado.web.RequestHandler):
         - qos: 要求本次发送消息的质量
         - timeout: 等待超时是间，单位为秒，0为默认超时时间。
         - callback: 回调函数。
+
+        返回：
+        成功：
+        {'status': 0, 'connections': 1}
+        connections：成功发送消息的连接。如果为0则表示用户没有在线。
+
+        失败:
+        {'status': -123, 'msg': 'timeout'}
         """
 
-        uid = ''
-        msg_type = ''
-        data = {}
-        qos = 0
+        uid = self.get_query_argument('uid')
+        msg_type = self.get_query_argument('msg_type')
+        data = self.get_query_argument('data')
+        qos = int(self.get_query_argument('qos', 2))
+        timeout = int(self.get_query_argument('timeout', 10))
 
         # 如果是集群模式，则直接调用其他服务器的接口。
         # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
 
-        if uid in WebSocketHandler.socket_handlers:
-            handlers = WebSocketHandler.socket_handlers[uid]
-            if not isinstance(handlers, list):
-                handlers = [handlers]
-            packet = Packet(command=Packet.PACKET_SEND,
-                            msg_type=msg_type,
-                            data=data, qos=qos)
+        future = WebSocketHandler.send_message(uid, msg_type,
+                                               data, qos, timeout,
+                                               self.send_finish)
 
-            results = yield [handler.send_packet(packet)
-                             for handler in handlers]
-        self.finish({'success': sum(results)})
+        self.toh = IOLoop.current().add_timeout(time.time() + timeout or 10,
+                                                self.handle_timeout)
 
-    @gen.engine
-    def send_message(self, uid, message_type, data, qos=0, timeout=0,
-                     callback=None):
-        """向客户端发送消息, 直至客户端有返回或超时。参数说明：
-        
-        返回：Feature,异步执行发送动作，而不block当前线程。
+    def send_finish(self, result):
+        """发送完成了，返回数据给客户端
         """
-        pass
+        IOLoop.current().remove_timeout(self.toh)
+        self.finish(json.dumps({'status': 0, 'success': result}))
+
+    def handle_timeout(self):
+        # 虽然超时，但是是否能够知道有部份成功发送？
+        self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))

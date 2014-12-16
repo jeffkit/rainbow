@@ -148,6 +148,22 @@ class WebSocketHandler(Handler):
         if self.uid in self.client_versions:
             del self.client_versions[self.uid]
 
+    @classmethod
+    def send_message(cls, uid, message_type, data, qos=0, timeout=0):
+        """本方法返回一个Future给调用者。
+        """
+        if uid in WebSocketHandler.socket_handlers:
+            handlers = WebSocketHandler.socket_handlers[uid]
+            if not isinstance(handlers, list):
+                handlers = [handlers]
+            packet = Packet(command=Packet.PACKET_SEND,
+                            msg_type=msg_type,
+                            data=data, qos=qos)
+
+            results = yield [handler.send_packet(packet)
+                             for handler in handlers]
+        self.finish({'success': sum(results)})
+
     def on_message(self, message):
         """message的前两个以上的字节为header，表示这是什么样的数据包及数据包长度。
         - send

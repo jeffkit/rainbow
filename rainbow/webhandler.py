@@ -41,9 +41,7 @@ class SendMessageHandler(tornado.web.RequestHandler):
 
     @tornado.web.asynchronous
     def get(self):
-        fetch_msg('uid', 'gggg', self.send_finish)
-        self.toh = IOLoop.current().add_timeout(time.time() + 10,
-                                                self.handle_timeout)
+        self.write('ok')
 
     @tornado.web.asynchronous
     def post(self):

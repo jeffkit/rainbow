@@ -36,22 +36,23 @@ RainBow服务器
 
 ### 配置
 修改/etc/rainbow/server.ini
-
+	[main]
 	# 用于对连接上来的客户端进行鉴权，失败者不能建立连接
-	auth_url: http://localhost:8000/auth/
+	auth_url = http://localhost:8000/auth/
 	
-	# 与客户端连接的socket端口，默认为1984
-	socket_port: 1984  
+	# 与客户端连接的websocket端口，默认为1984
+	socket_port = 1984  
 	
 	# 被业务逻辑服务器调用的http端口，默认为2501
-	http_port:2501  
+	http_port = 2501  
 	
 	# 用于与业务逻辑服务器相互调用时签名的token
-	security_key: xxxxxxx 
+	security_key = xxxxxxx 
 	
 	# 客户端上行的消息，转发至业务服务器的入口地址模板，需要提供{{message_type}}占位参数。
 	# RainBow会将上行的消息类型填充至该模板，并以POST JSON的方式将消息参数传递过去。
-	forward_url: http://localhost:8000/chat/{{message_type}}/
+	# 上行时 url将会是 http://localhost:8000/chat/{message_type}/
+	forward_url = http://localhost:8000/chat/
 
 
 ### 运行

@@ -3,14 +3,17 @@ import time
 import json
 import struct
 
+import tornado
 from tornado.websocket import WebSocketHandler as Handler
 from tornado.concurrent import TracebackFuture
 from tornado.ioloop import IOLoop
+from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import HTTPRequest
 import redis
 
+from config import g_CONFIG
 import logging as log
 log.basicConfig(level='INFO')
-
 import settings
 redis_client = redis.Redis(
     settings.REDIS_HOST,
@@ -55,7 +58,7 @@ def set_msg_hdl(uid, message_id, web_handle_response, client_count):
         g_uid_msgid_hdl[uid] = message_id_list
     message_id_list[message_id] = {}
     message_id_list[message_id]['web_handle_response'] = web_handle_response
-    # ack 或 rec 完成了的记录
+    # 客户端回复 ack 或 rec 表示收到
     message_id_list[message_id]['finish_list'] = {}
     message_id_list[message_id]['error_list'] = {}
     message_id_list[message_id]['client_count'] = client_count
@@ -193,6 +196,8 @@ class WebSocketHandler(Handler):
         # 每个 ws 连接也要维护 消息的 future
         self.future_rsp_hl = {}
         self.rsp_timeout_hl = {}
+        self.pendding_message_ids = []
+        self.received_message_ids = []
 
     def handler_close(self):
         for toh in self.rsp_timeout_hl:
@@ -253,6 +258,8 @@ class WebSocketHandler(Handler):
         if self.uid in self.client_versions:
             del self.client_versions[self.uid]
 
+        self.close_flag = True
+
     @classmethod
     def send_message(
             cls, uid, message_type, data,
@@ -280,7 +287,6 @@ class WebSocketHandler(Handler):
             # 没有客户端在线
             if web_handle_response:
                 web_handle_response(0)
-            pass
 
     def on_message(self, message):
         """message的前两个以上的字节为header，表示这是什么样的数据包及数据包长度。
@@ -304,30 +310,40 @@ class WebSocketHandler(Handler):
         except Exception:
             log.error('handle message error %s' % message, exc_info=True)
 
+    # 客户端主动发消息的相应
+    @tornado.gen.coroutine
     def on_packet_send(self, packet):
         """收到PACKET_SEND消息
         """
+
+        http_client = AsyncHTTPClient()
+        headers = {'content-type': 'application/json'}
+        url = g_CONFIG['forward_url'] + str(packet.message_type) + '/'
+        # todo  packet在上一步是否可以不用 json.loads
+        body = json.dumps(packet.data)
+        req = HTTPRequest(
+            url=url, method='POST', body=body, headers=headers)
+        response = yield http_client.fetch(req)
+        log.debug(response.code)
+
         if packet.qos == 0:
-            result = None
             return
         elif packet.qos == 1:
-            # 需要返回ack
-            result = None
-            rp = Packet(command=Packet.PACKET_ACK, data=result,
+            rp = Packet(command=Packet.PACKET_ACK,
                         message_id=packet.message_id)
-            self.write_message(rp.raw)
         elif packet.qos == 2:
-            # 需要返回rec
             if packet.dup == 1 or \
                     packet.message_id in self.received_message_ids:
                 # 重复消息，不处理。
                 return
-            result = None
             self.received_message_ids.add(packet.message_id)
-            rp = Packet(command=Packet.PACKET_REC, data=result,
+            rp = Packet(command=Packet.PACKET_REC,
                         message_id=packet.message_id)
-            self.write_message(rp.raw)
+        # todo
+        # http回来前, websocket 已经关闭, 是什么效果
+        self.write_message(rp.raw)
 
+    # 服务器主动发消息的返回
     def on_packet_ack(self, packet):
         """收到PACKET_ACK消息, 结果要通知给http的回调者。这里要怎么搞？
         """
@@ -335,11 +351,20 @@ class WebSocketHandler(Handler):
         if handle_response:
             handle_response(packet)
 
+    # 服务器主动发消息的返回
     def on_packet_rec(self, packet):
         """收到PACKET_REC消息, 要通知给http调用者。
         """
-        pass
+        if packet.message_id not in self.pendding_message_ids:
+            handle_response = self.future_rsp_hl.get(packet.message_id)
+            if handle_response:
+                handle_response(packet)
 
+        packet = Packet(command=Packet.PACKET_REL,
+                        message_id=packet.message_id)
+        self.write_message(packet.raw)
+
+    # 客户端主动发消息的相应
     def on_packet_rel(self, packet):
         """收到PACKET_REL消息，删除消息ID，返回COM消息。
         """
@@ -349,12 +374,14 @@ class WebSocketHandler(Handler):
         rp = Packet(command=Packet.PACKET_COM, message_id=packet.message_id)
         self.write_message(rp.raw)
 
+    # 服务器主动发消息的返回
     def on_packet_com(self, packet):
         """收到PACKET_COM消息。删除消息ID即可。
         """
         if packet.message_id in self.pendding_message_ids:
             self.pendding_message_ids.remove(packet.message_id)
 
+    # 服务器主动发消息成功后的回调
     def send_packet_cb(self, message_id, packet, exception):
         toh = self.rsp_timeout_hl.get(message_id)
         if toh:
@@ -362,6 +389,7 @@ class WebSocketHandler(Handler):
             del self.rsp_timeout_hl[message_id]
         send_msg_response(self.uid, message_id, self, error=exception)
 
+    # 服务器主动发消息后的超时
     def send_packet_cb_timeout(self, message_id):
         send_msg_response(self.uid, message_id, self, error='timeout')
 
@@ -387,7 +415,7 @@ class WebSocketHandler(Handler):
                     # 有可能是没发确认就on_close了
                     exception = future.exception()
                     # todo
-                    # 客户端不发 ack 直接 close 会怎么样, handler_close 函数会有效果吗
+                    # 客户端不发 ack 而直接 close 会怎么样, handler_close 函数会有效果吗
                     # add_callback的数据，如果timeout了，内存是如何清空
                 IOLoop.current().add_callback(
                     self.send_packet_cb, message_id, packet, exception)
@@ -425,26 +453,37 @@ class WebSocketHandler(Handler):
             else:
                 handler.close()
                 log.info('close here 2')
+        # todo shutdown 会调用 on_close 吗
 
     def get(self, *args, **kwds):
         """在打开websocket前先进行权限校验，如果没权限直接断开连接。
         """
-        log.info('在打开websocket前先进行权限校验，如果没权限直接断开连接')
-        # 保存uid或关闭连接
-        # result = self.valid_request()
-        uid = self.valid_request()
+        log.info(u'在打开websocket前先进行权限校验，如果没权限直接断开连接')
+        self.valid_request()
+        uid = getattr(self, 'uid', None)
         if not uid:
             log.warn('invalid request, close!')
             self.set_status(401)
-            self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated.')
+            self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
             return
-        else:
-            self.uid = uid
         super(WebSocketHandler, self).get(*args, **kwds)
 
+    def check_origin(self, origin):
+        log.info('check_origin check_origin 先还是 get 先?')
+        return True
+
+    @tornado.gen.coroutine
     def valid_request(self):
         """检查该请求是否合法，如果合法则返回uid，否则为空。
         """
         log.info(self.request.headers)
         # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
-        return 'uid'
+        http_client = AsyncHTTPClient()
+        url = g_CONFIG['auth_url']
+        req = HTTPRequest(
+            url=url, method='POST', headers=self.request.headers)
+        response = yield http_client.fetch(req)
+        log.debug(response.body)
+        body = json.loads(response.body)
+        if body['status'] == 'success':
+            self.uid = body['uid']

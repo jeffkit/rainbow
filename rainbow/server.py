@@ -10,7 +10,7 @@ import tornado.ioloop
 from tornado.httpserver import HTTPServer
 
 from wshandler import WebSocketHandler
-from wshandler2 import SocketHandler
+# from wshandler2 import SocketHandler
 from webhandler import SendMessageHandler
 
 
@@ -47,7 +47,7 @@ MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 1
 application = tornado.web.Application([
     # for websocket
     (r'/connect/', WebSocketHandler),
-    (r'/connect2/', SocketHandler),
+    # (r'/connect2/', SocketHandler),
 
     # for HTTP
     (r'/send/', SendMessageHandler),

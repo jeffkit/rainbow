@@ -8,12 +8,14 @@ from tornado.websocket import WebSocketHandler as Handler
 from tornado.concurrent import TracebackFuture
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
+from tornado.websocket import WebSocketClosedError
 import redis
 
 from config import g_CONFIG
 import logging as log
-log.basicConfig(level='INFO')
+log.basicConfig(level='DEBUG')
 import settings
 redis_client = redis.Redis(
     settings.REDIS_HOST,
@@ -75,12 +77,19 @@ def clear_msg_hdl(uid, message_id):
 
 # 对 webhandler的回应
 def send_msg_response(uid, message_id, ws_handler, error=''):
+    log.debug('send_msg_response ')
+    log.debug('send_msg_response message_id')
+    log.debug(message_id)
+    log.debug('send_msg_response error')
+    log.debug(error)
     if not g_uid_msgid_hdl.get(uid):
         return
     if not g_uid_msgid_hdl[uid].get(message_id):
         return
 
     hdl_info = g_uid_msgid_hdl[uid][message_id]
+    log.debug('send_msg_response hdl_info =')
+    log.debug(hdl_info)
     # 用字典防止多次确认
     if not error:
         hdl_info['finish_list'][ws_handler] = 1
@@ -92,6 +101,11 @@ def send_msg_response(uid, message_id, ws_handler, error=''):
 
     finish_count = len(hdl_info['finish_list'])
     rsp_count = finish_count + len(hdl_info['error_list'])
+
+    log.debug('send_msg_response error_list %d' % len(hdl_info['error_list']))
+    log.debug('send_msg_response finish_count %d' % finish_count)
+    log.debug('send_msg_response rsp_count %d' % rsp_count)
+    log.debug('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
         if hdl_info['web_handle_response']:
@@ -123,11 +137,15 @@ class Packet(object):
             meta = struct.unpack('!B', raw[0])
             if not meta[0]:
                 self._valid = False
+                log.error('return 1')
                 return
 
             command = (meta[0] & 0xF0) / 16
+            log.info('Packet __init__ command = ')
+            log.info(command)
             if command == self.PACKET_RESERVED:
                 self._valid = False
+                log.error('return 2')
                 return
 
             qos = (meta[0] & 0x06) / 2
@@ -135,15 +153,37 @@ class Packet(object):
             if command in (self.PACKET_SEND,
                            self.PACKET_ACK,
                            self.PACKET_REC):
-                msg_type = struct.unpack('!H', raw[1:3])[0]
-                data_idx = 3
-                if qos > 0:
-                    message_id = struct.unpack('!H', raw[3:5])[0]
-                    data_idx = 5
-                if len(data) > data_idx:
-                    data = json.loads(data[data_idx:])
+                data_idx = 1
+                if command == self.PACKET_SEND:
+                    msg_type = struct.unpack(
+                        '!H', raw[data_idx:data_idx + 2])[0]
+                    data_idx = data_idx + 2
+                    if qos > 0:
+                        message_id = struct.unpack(
+                            '!H', raw[data_idx:data_idx + 2])[0]
+                        data_idx = data_idx + 2
+                else:
+                    message_id = struct.unpack(
+                        '!H', raw[data_idx:data_idx + 2])[0]
+                    data_idx = data_idx + 2
+                if len(raw) > data_idx:
+                    # data = json.loads(raw[data_idx:])
+                    data = raw[data_idx:]
             else:
                 message_id = struct.unpack('!H', raw[1:3])[0]
+
+        log.info('command')
+        log.info(command)
+        log.info('msg_type')
+        log.info(msg_type)
+        log.info('qos')
+        log.info(qos)
+        log.info('dup')
+        log.info(dup)
+        log.info('message_id')
+        log.info(message_id)
+        log.info('data')
+        log.info(data)
 
         self.command = command  # 命令
         self.msg_type = msg_type
@@ -164,7 +204,9 @@ class Packet(object):
             else:
                 _raw += struct.pack('!H', self.message_id)
             if self.data:
-                _raw += json.dumps(self.data, ensure_ascii=False)
+                # _raw += json.dumps(self.data, ensure_ascii=False)
+                _raw += self.data
+
             self._raw = _raw
         return self._raw
 
@@ -190,7 +232,7 @@ class WebSocketHandler(Handler):
             redis_client.hsetnx(USER_ID_HASH, self.uid, 1)
         except:
             pass
-        self.handler_init()
+        # self.handler_init()
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
@@ -200,9 +242,20 @@ class WebSocketHandler(Handler):
         self.received_message_ids = []
 
     def handler_close(self):
-        for toh in self.rsp_timeout_hl:
-            IOLoop.current().remove_timeout(self.toh)
-        for handle_response in self.future_rsp_hl:
+        log.debug('handler_close self.rsp_timeout_hl =')
+        log.debug(self.rsp_timeout_hl)
+        for _, toh in self.rsp_timeout_hl.iteritems():
+            # toh = self.rsp_timeout_hl[toh2]
+            log.debug('handle_response toh = ')
+            log.debug(toh)
+            IOLoop.current().remove_timeout(toh)
+
+        log.debug('handler_close self.future_rsp_hl =')
+        log.debug(self.future_rsp_hl)
+        for _, handle_response in self.future_rsp_hl.iteritems():
+            log.info('handler_close self id = %d' % id(self))
+            log.info('handler_close id(handle_response)=%d' %
+                     id(handle_response))
             handle_response(exception='on_close')
         self.future_rsp_hl = None
         self.rsp_timeout_hl = None
@@ -223,8 +276,10 @@ class WebSocketHandler(Handler):
     def on_close(self):
         """从handler_map移除掉handler
         """
-        log.info('will close handler for user %s' % self.uid)
-        log.info('handlers defore close %d' % len(self.socket_handlers))
+        log.info('on_close will close handler for user %s' % self.uid)
+        log.info('on_close handlers defore close %d' %
+                 len(self.socket_handlers))
+        log.info('on_close self id = %d' % id(self))
 
         self.handler_close()
 
@@ -255,8 +310,9 @@ class WebSocketHandler(Handler):
         except:
             pass
 
-        if self.uid in self.client_versions:
-            del self.client_versions[self.uid]
+        # if self.uid in self.client_versions:
+        #     del self.client_versions[self.uid]
+        # 干嘛用的？
 
         self.close_flag = True
 
@@ -296,12 +352,23 @@ class WebSocketHandler(Handler):
         - send_release
         - send_complete
         """
+        log.info('on_message')
+        log.info(message)
         try:
             if not message:
+                log.error('if not message:')
                 return
             pck = Packet(raw=message)
             if not pck.valid:
+                log.error('if not pck.valid')
                 return
+            # for test
+            # pas
+            # pck.command = 1
+            # pck.qos = 2
+            # pck.data = "{'haha': 'jjj'}"
+            # pck.dup = 0
+
             {Packet.PACKET_SEND: self.on_packet_send,
              Packet.PACKET_ACK: self.on_packet_ack,
              Packet.PACKET_REC: self.on_packet_rec,
@@ -315,38 +382,69 @@ class WebSocketHandler(Handler):
     def on_packet_send(self, packet):
         """收到PACKET_SEND消息
         """
-
+        log.info('jjjjjjjjjjjjjjj')
+        log.info('on_packet_send func')
+        log.info('jjjjjjjjjjjjjjj')
         http_client = AsyncHTTPClient()
+        # http_client = HTTPClient()
         headers = {'content-type': 'application/json'}
-        url = g_CONFIG['forward_url'] + str(packet.message_type) + '/'
+        log.info('headers = %s' % headers)
+        # log.info(g_CONFIG['forward_url'] + str(packet.message_type) + '/')
+        url = 'http://127.0.0.1:4444/api/chat/1/'
+        log.info(url)
+        # url = g_CONFIG['forward_url'] + str(packet.message_type) + '/'
+        log.info('url = %s' % url)
         # todo  packet在上一步是否可以不用 json.loads
-        body = json.dumps(packet.data)
+        # body = json.dumps(packet.data)
+        body = packet.data
         req = HTTPRequest(
             url=url, method='POST', body=body, headers=headers)
+        log.info('after HTTPRequest')
         response = yield http_client.fetch(req)
+        # response = http_client.fetch(req)
+        log.debug('response.code = ')
         log.debug(response.code)
+        data = response.body or None
 
+        log.info('qos = ')
+        log.info(packet.qos)
+        log.info('type(packet.qos) = ')
+        log.info(type(packet.qos))
+        log.info(data)
         if packet.qos == 0:
             return
         elif packet.qos == 1:
             rp = Packet(command=Packet.PACKET_ACK,
-                        message_id=packet.message_id)
+                        message_id=packet.message_id, data=data)
         elif packet.qos == 2:
+            log.info('elif packet.qos == 2  1')
             if packet.dup == 1 or \
                     packet.message_id in self.received_message_ids:
                 # 重复消息，不处理。
+                log.info('elif packet.qos == 2  1.5 return')
                 return
-            self.received_message_ids.add(packet.message_id)
+            log.info('elif packet.qos == 2  3')
+            self.received_message_ids.append(packet.message_id)
+            log.info('elif packet.qos == 2  4')
             rp = Packet(command=Packet.PACKET_REC,
-                        message_id=packet.message_id)
+                        message_id=packet.message_id,
+                        data=data)
+            log.info('elif packet.qos == 2 5')
         # todo
         # http回来前, websocket 已经关闭, 是什么效果
-        self.write_message(rp.raw)
+        log.info('rp.raw = ')
+        log.info(rp.raw)
+        log.info('len(rp.raw) = ')
+        log.info(len(rp.raw))
+        self.write_message(rp.raw, binary=True)
+        log.info('after self.write_message(rp.raw)')
 
     # 服务器主动发消息的返回
     def on_packet_ack(self, packet):
         """收到PACKET_ACK消息, 结果要通知给http的回调者。这里要怎么搞？
         """
+        log.info('on_packet_ack func')
+
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
             handle_response(packet)
@@ -355,6 +453,8 @@ class WebSocketHandler(Handler):
     def on_packet_rec(self, packet):
         """收到PACKET_REC消息, 要通知给http调用者。
         """
+        log.info('on_packet_rec func')
+
         if packet.message_id not in self.pendding_message_ids:
             handle_response = self.future_rsp_hl.get(packet.message_id)
             if handle_response:
@@ -362,42 +462,53 @@ class WebSocketHandler(Handler):
 
         packet = Packet(command=Packet.PACKET_REL,
                         message_id=packet.message_id)
-        self.write_message(packet.raw)
+        self.write_message(packet.raw, binary=True)
 
     # 客户端主动发消息的相应
     def on_packet_rel(self, packet):
         """收到PACKET_REL消息，删除消息ID，返回COM消息。
         """
+        log.info('on_packet_rel func')
+
         if packet.message_id not in self.received_message_ids:
             return
         self.received_message_ids.remove(packet.message_id)
         rp = Packet(command=Packet.PACKET_COM, message_id=packet.message_id)
-        self.write_message(rp.raw)
+        self.write_message(rp.raw, binary=True)
 
     # 服务器主动发消息的返回
     def on_packet_com(self, packet):
         """收到PACKET_COM消息。删除消息ID即可。
         """
+        log.info('on_packet_com func')
+
         if packet.message_id in self.pendding_message_ids:
             self.pendding_message_ids.remove(packet.message_id)
 
     # 服务器主动发消息成功后的回调
     def send_packet_cb(self, message_id, packet, exception):
-        toh = self.rsp_timeout_hl.get(message_id)
-        if toh:
-            IOLoop.current().remove_timeout(self.toh)
-            del self.rsp_timeout_hl[message_id]
+        log.debug('send_packet_cb func')
+        if self.rsp_timeout_hl:
+            # 如果是on_close 触发的 回调，就已经去掉timeout了
+            toh = self.rsp_timeout_hl.get(message_id)
+            if toh:
+                IOLoop.current().remove_timeout(toh)
+                del self.rsp_timeout_hl[message_id]
         send_msg_response(self.uid, message_id, self, error=exception)
 
     # 服务器主动发消息后的超时
     def send_packet_cb_timeout(self, message_id):
+        log.debug('send_packet_cb_timeout func')
+        toh = self.rsp_timeout_hl.get(message_id)
+        if toh:
+            del self.rsp_timeout_hl[message_id]
         send_msg_response(self.uid, message_id, self, error='timeout')
 
     def send_packet(self, packet, timeout):
         """此方法需要返回Future
         """
         if packet.qos == self.QOS_LEVEL1:
-            self.write_message(packet.raw)
+            self.write_message(packet.raw, binary=True)
         else:
             # qos = 1 或 2
             # 生成消息id，将消息发送至客户端，然后记录消息id。等待ack
@@ -406,7 +517,7 @@ class WebSocketHandler(Handler):
             future = TracebackFuture()
 
             def handle_future(future):
-                print 'handle_future'
+                log.debug('send_packet handle_future func')
                 packet = None
                 exception = ''
                 try:
@@ -422,21 +533,35 @@ class WebSocketHandler(Handler):
             future.add_done_callback(handle_future)
 
             def handle_response(packet=None, exception=None):
-                print 'handle_response'
+                print 'send_packet handle_response'
+                print 'send_packet future id = %d' % id(future)
                 if packet:
                     future.set_result(packet)
                 else:
                     future.set_exception(exception)
             self.future_rsp_hl[message_id] = handle_response
+            log.info('send_packet future id = %d' % id(future))
+            log.info('send_packet self id = %d' % id(self))
+            log.info('send_packet handle_response id = %d' %
+                     id(handle_response))
 
             toh = IOLoop.current().add_timeout(
                 time.time() + timeout,
                 self.send_packet_cb_timeout,
                 message_id)
+            log.info('send_packet  toh = ')
+            log.info(toh)
+            log.info('send_packet  message_id = ')
+            log.info(message_id)
+
             self.rsp_timeout_hl[message_id] = toh
 
             packet.message_id = message_id
-            self.write_message(packet.raw)
+
+            try:
+                self.write_message(packet.raw, binary=True)
+            except WebSocketClosedError:
+                log.info('WebSocketClosedError')
 
             return future
 
@@ -455,11 +580,16 @@ class WebSocketHandler(Handler):
                 log.info('close here 2')
         # todo shutdown 会调用 on_close 吗
 
+    @tornado.gen.coroutine
     def get(self, *args, **kwds):
         """在打开websocket前先进行权限校验，如果没权限直接断开连接。
         """
-        log.info(u'在打开websocket前先进行权限校验，如果没权限直接断开连接')
-        self.valid_request()
+        self.handler_init()
+        log.info(u'get func 在打开websocket前先进行权限校验，如果没权限直接断开连接')
+        response = yield self.valid_request()
+        body = json.loads(response.body)
+        if body['status'] == 'success':
+            self.uid = body['uid']
         uid = getattr(self, 'uid', None)
         if not uid:
             log.warn('invalid request, close!')
@@ -468,22 +598,16 @@ class WebSocketHandler(Handler):
             return
         super(WebSocketHandler, self).get(*args, **kwds)
 
-    def check_origin(self, origin):
-        log.info('check_origin check_origin 先还是 get 先?')
-        return True
-
-    @tornado.gen.coroutine
     def valid_request(self):
         """检查该请求是否合法，如果合法则返回uid，否则为空。
         """
+        log.info('valid_request func')
         log.info(self.request.headers)
         # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
         http_client = AsyncHTTPClient()
+        # http_client = HTTPClient()
         url = g_CONFIG['auth_url']
+        # AssertionError: Body must not be empty for "POST" request
         req = HTTPRequest(
-            url=url, method='POST', headers=self.request.headers)
-        response = yield http_client.fetch(req)
-        log.debug(response.body)
-        body = json.loads(response.body)
-        if body['status'] == 'success':
-            self.uid = body['uid']
+            url=url, method='GET', headers=self.request.headers)
+        return http_client.fetch(req)

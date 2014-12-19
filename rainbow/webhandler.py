@@ -48,7 +48,7 @@ class SendMessageHandler(tornado.web.RequestHandler):
         """接受来自业务服务器的消息，发送给客户端。
         - uid: 用户唯一ID
         - message_type: 消息类型
-        - data: 消息参数，JSON
+        - data: 消息参数，JSON格式
         - qos: 要求本次发送消息的质量
         - timeout: 等待超时是间，单位为秒，0为默认超时时间。
         - callback: 回调函数。
@@ -62,11 +62,16 @@ class SendMessageHandler(tornado.web.RequestHandler):
         {'status': -123, 'msg': 'timeout'}
         """
 
-        uid = self.get_query_argument('uid')
-        msg_type = self.get_query_argument('msg_type')
-        data = self.get_query_argument('data')
-        qos = int(self.get_query_argument('qos', 2))
-        timeout = int(self.get_query_argument('timeout', 10))
+        # uid = self.get_query_argument('uid')
+        # msg_type = self.get_query_argument('msg_type')
+        # data = self.get_query_argument('data')
+        # qos = int(self.get_query_argument('qos', 2))
+        # timeout = int(self.get_query_argument('timeout', 10))
+        uid = 'uuiidd'
+        msg_type = 1
+        data = 'data'
+        qos = 2
+        timeout = 10
 
         # 如果是集群模式，则直接调用其他服务器的接口。
         # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。

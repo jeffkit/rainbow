@@ -150,6 +150,17 @@ class Packet(object):
             command = (meta[0] & 0xF0) / 16
             log.info('Packet __init__ command = ')
             log.info(command)
+            if command not in [
+                    self.PACKET_RESERVED,
+                    self.PACKET_SEND,
+                    self.PACKET_ACK,
+                    self.PACKET_REC,
+                    self.PACKET_REL,
+                    self.PACKET_COM]:
+                self._valid = False
+                log.error(u' 心跳吗 return')
+                return
+
             if command == self.PACKET_RESERVED:
                 self._valid = False
                 log.error('return 2')

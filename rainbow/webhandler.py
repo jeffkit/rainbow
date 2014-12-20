@@ -1,15 +1,16 @@
 # encoding=utf-8
 
+import json
+import time
+import logging as log
+log.basicConfig(level='DEBUG')
+
 import tornado.web
 from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler
 # from tornado.httpclient import AsyncHTTPClient
 # from tornado.httpclient import HTTPClient
 
-import json
-import time
-
-# from wshandler2 import SocketHandler
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
 
@@ -61,16 +62,19 @@ class SendMessageHandler(tornado.web.RequestHandler):
         失败:
         {'status': -123, 'msg': 'timeout'}
         """
-
-        # uid = self.get_query_argument('uid')
+        log.info('post ' * 5)
+        uid = self.get_query_argument('uid', '')
+        log.info('uid = %s' % uid)
+        if not uid:
+            uid = 'uuiidd'
         # msg_type = self.get_query_argument('msg_type')
         # data = self.get_query_argument('data')
-        # qos = int(self.get_query_argument('qos', 2))
+        qos = int(self.get_query_argument('qos', 2))
         # timeout = int(self.get_query_argument('timeout', 10))
-        uid = 'uuiidd'
+        # uid = 'uuiidd'
         msg_type = 1
-        data = 'data'
-        qos = 2
+        data = self.request.body
+        # qos = 2
         timeout = 10
 
         # 如果是集群模式，则直接调用其他服务器的接口。

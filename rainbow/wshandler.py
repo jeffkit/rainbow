@@ -8,7 +8,7 @@ from tornado.websocket import WebSocketHandler as Handler
 from tornado.concurrent import TracebackFuture
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
-from tornado.httpclient import HTTPClient
+# from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
 from tornado.websocket import WebSocketClosedError
 import redis
@@ -41,6 +41,8 @@ def clear_uid_msg_data(uid):
 def get_next_msgid(uid):
     # 单线程？
     message_id = g_uid_msgid.get(uid, 0)
+    if message_id >= 65535:
+        message_id = 0
     message_id = message_id + 1
     g_uid_msgid[uid] = message_id
     return message_id
@@ -77,19 +79,24 @@ def clear_msg_hdl(uid, message_id):
 
 # 对 webhandler的回应
 def send_msg_response(uid, message_id, ws_handler, error=''):
-    log.debug('send_msg_response ')
-    log.debug('send_msg_response message_id')
-    log.debug(message_id)
-    log.debug('send_msg_response error')
-    log.debug(error)
+    if ws_handler.future_rsp_hl.get(message_id):
+        del ws_handler.future_rsp_hl[message_id]
+
+    log.info('send_msg_response ')
+    log.info('send_msg_response message_id')
+    log.info(message_id)
+    log.info('send_msg_response error')
+    log.info(error)
     if not g_uid_msgid_hdl.get(uid):
+        log.info('send_msg_response return 1')
         return
     if not g_uid_msgid_hdl[uid].get(message_id):
+        log.info('send_msg_response return 2')
         return
 
     hdl_info = g_uid_msgid_hdl[uid][message_id]
-    log.debug('send_msg_response hdl_info =')
-    log.debug(hdl_info)
+    log.info('send_msg_response hdl_info =')
+    log.info(hdl_info)
     # 用字典防止多次确认
     if not error:
         hdl_info['finish_list'][ws_handler] = 1
@@ -102,10 +109,10 @@ def send_msg_response(uid, message_id, ws_handler, error=''):
     finish_count = len(hdl_info['finish_list'])
     rsp_count = finish_count + len(hdl_info['error_list'])
 
-    log.debug('send_msg_response error_list %d' % len(hdl_info['error_list']))
-    log.debug('send_msg_response finish_count %d' % finish_count)
-    log.debug('send_msg_response rsp_count %d' % rsp_count)
-    log.debug('send_msg_response client_count = %d' % hdl_info['client_count'])
+    log.info('send_msg_response error_list %d' % len(hdl_info['error_list']))
+    log.info('send_msg_response finish_count %d' % finish_count)
+    log.info('send_msg_response rsp_count %d' % rsp_count)
+    log.info('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
         if hdl_info['web_handle_response']:
@@ -232,7 +239,6 @@ class WebSocketHandler(Handler):
             redis_client.hsetnx(USER_ID_HASH, self.uid, 1)
         except:
             pass
-        # self.handler_init()
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
@@ -242,21 +248,28 @@ class WebSocketHandler(Handler):
         self.received_message_ids = []
 
     def handler_close(self):
-        log.debug('handler_close self.rsp_timeout_hl =')
-        log.debug(self.rsp_timeout_hl)
+        log.info('handler_close self.rsp_timeout_hl =')
+        log.info(self.rsp_timeout_hl)
         for _, toh in self.rsp_timeout_hl.iteritems():
-            # toh = self.rsp_timeout_hl[toh2]
-            log.debug('handle_response toh = ')
-            log.debug(toh)
+            log.info('handle_response toh = ')
+            log.info(toh)
             IOLoop.current().remove_timeout(toh)
 
-        log.debug('handler_close self.future_rsp_hl =')
-        log.debug(self.future_rsp_hl)
-        for _, handle_response in self.future_rsp_hl.iteritems():
+        log.info('handler_close self.future_rsp_hl =')
+        log.info(self.future_rsp_hl)
+        for message_id, handle_response in self.future_rsp_hl.iteritems():
+            log.info('handler_close message_id = %d' % message_id)
             log.info('handler_close self id = %d' % id(self))
             log.info('handler_close id(handle_response)=%d' %
                      id(handle_response))
-            handle_response(exception='on_close')
+            try:
+                handle_response(exception='on_close')
+            except Exception, e:
+                import traceback
+                log.error('handler_close exception')
+                log.error(e)
+                log.error(traceback.format_exc())
+
         self.future_rsp_hl = None
         self.rsp_timeout_hl = None
 
@@ -302,7 +315,7 @@ class WebSocketHandler(Handler):
         if not handlers:
             clear_uid_msg_data(self.uid)
 
-        log.debug('handlers after close %d' % len(self.socket_handlers))
+        log.info('handlers after close %d' % len(self.socket_handlers))
         try:
             if redis_client.hexists(USER_ID_HASH, self.uid):
                 redis_client.hdel(USER_ID_HASH, self.uid)
@@ -402,8 +415,8 @@ class WebSocketHandler(Handler):
         log.info('after HTTPRequest')
         response = yield http_client.fetch(req)
         # response = http_client.fetch(req)
-        log.debug('response.code = ')
-        log.debug(response.code)
+        log.info('response.code = ')
+        log.info(response.code)
         data = response.body or None
 
         log.info('qos = ')
@@ -487,7 +500,7 @@ class WebSocketHandler(Handler):
 
     # 服务器主动发消息成功后的回调
     def send_packet_cb(self, message_id, packet, exception):
-        log.debug('send_packet_cb func')
+        log.info('send_packet_cb func')
         if self.rsp_timeout_hl:
             # 如果是on_close 触发的 回调，就已经去掉timeout了
             toh = self.rsp_timeout_hl.get(message_id)
@@ -498,7 +511,7 @@ class WebSocketHandler(Handler):
 
     # 服务器主动发消息后的超时
     def send_packet_cb_timeout(self, message_id):
-        log.debug('send_packet_cb_timeout func')
+        log.info('send_packet_cb_timeout func')
         toh = self.rsp_timeout_hl.get(message_id)
         if toh:
             del self.rsp_timeout_hl[message_id]
@@ -517,7 +530,7 @@ class WebSocketHandler(Handler):
             future = TracebackFuture()
 
             def handle_future(future):
-                log.debug('send_packet handle_future func')
+                log.info('send_packet handle_future func')
                 packet = None
                 exception = ''
                 try:
@@ -533,8 +546,9 @@ class WebSocketHandler(Handler):
             future.add_done_callback(handle_future)
 
             def handle_response(packet=None, exception=None):
-                print 'send_packet handle_response'
-                print 'send_packet future id = %d' % id(future)
+                log.info('send_packet handle_response')
+                log.info('send_packet message_id = %d' % message_id)
+                log.info('send_packet future id = %d' % id(future))
                 if packet:
                     future.set_result(packet)
                 else:
@@ -588,6 +602,7 @@ class WebSocketHandler(Handler):
         log.info(u'get func 在打开websocket前先进行权限校验，如果没权限直接断开连接')
         response = yield self.valid_request()
         body = json.loads(response.body)
+        log.info(u'get func body = %s' % body)
         if body['status'] == 'success':
             self.uid = body['uid']
         uid = getattr(self, 'uid', None)
@@ -598,11 +613,19 @@ class WebSocketHandler(Handler):
             return
         super(WebSocketHandler, self).get(*args, **kwds)
 
+    def check_origin(self, origin):
+        """ 在 get 会验证 uid，这里返回 True就可以
+        """
+
+        return True
+
     def valid_request(self):
         """检查该请求是否合法，如果合法则返回uid，否则为空。
         """
         log.info('valid_request func')
+        self.request.headers['HTTP_X_HHHHHHHH'] = 'gggggg'
         log.info(self.request.headers)
+        log.info('type headers = %s' % type(self.request.headers))
         # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
         http_client = AsyncHTTPClient()
         # http_client = HTTPClient()

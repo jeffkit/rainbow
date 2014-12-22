@@ -8,6 +8,7 @@ log.basicConfig(level='DEBUG')
 import tornado.web
 from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler
+from wshandler import sub, unsub
 # from tornado.httpclient import AsyncHTTPClient
 # from tornado.httpclient import HTTPClient
 
@@ -111,9 +112,15 @@ class SubChannelHandler(tornado.web.RequestHandler):
         if not identity or not channel:
             self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
 
-        # sub
+        ret, errmsg = sub(identity, channel)
+        data = {}
+        if ret:
+            data['status'] = 0
+        else:
+            data['status'] = 1
+            data['msg'] = errmsg
 
-        self.write(json.dumps({'status': 0}))
+        self.write(json.dumps(data))
 
 
 class UnSubChannelHandler(tornado.web.RequestHandler):
@@ -126,6 +133,12 @@ class UnSubChannelHandler(tornado.web.RequestHandler):
         if not identity or not channel:
             self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
 
-        # unsub
+        ret, errmsg = unsub(identity, channel)
+        data = {}
+        if ret:
+            data['status'] = 0
+        else:
+            data['status'] = 1
+            data['msg'] = errmsg
 
-        self.write(json.dumps({'status': 0}))
+        self.write(json.dumps(data))

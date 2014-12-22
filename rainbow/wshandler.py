@@ -68,35 +68,39 @@ def set_msg_hdl(channel, message_id, web_handle_response, client_count):
     message_id_list[message_id]['client_count'] = client_count
 
 
-def clear_msg_hdl(channel, message_id):
+def clear_msg_hdl(channel, message_id_channel):
     if not g_channel_msgid_hdl.get(channel):
         return
-    if not g_channel_msgid_hdl[channel].get(message_id):
+    if not g_channel_msgid_hdl[channel].get(message_id_channel):
         return
 
-    del g_channel_msgid_hdl[channel][message_id]
+    del g_channel_msgid_hdl[channel][message_id_channel]
 
 
 # 对 webhandler的回应
-def send_msg_response(channel, message_id, ws_handler, error=''):
-    if ws_handler.future_rsp_hl.get(message_id):
-        del ws_handler.future_rsp_hl[message_id]
+def send_msg_response(channel, packet_msg_id, ws_handler, error=''):
+    if ws_handler.future_rsp_hl.get(packet_msg_id):
+        del ws_handler.future_rsp_hl[packet_msg_id]
 
     log.info('send_msg_response ')
     log.info('send_msg_response message_id')
-    log.info(message_id)
+    log.info(packet_msg_id)
     log.info('send_msg_response error')
     log.info(error)
+
+    message_id_channel = ws_handler.packet_msg_id_to_channel.get(packet_msg_id)
+    if not message_id_channel:
+        return
+    del ws_handler.packet_msg_id_to_channel[packet_msg_id]
+
     if not g_channel_msgid_hdl.get(channel):
         log.info('send_msg_response return 1')
         return
-    if not g_channel_msgid_hdl[channel].get(message_id):
+    if not g_channel_msgid_hdl[channel].get(message_id_channel):
         log.info('send_msg_response return 2')
         return
 
-    # 这里又必须是 send_过来的，才找的回去
-    # todo todo todo todo
-    hdl_info = g_channel_msgid_hdl[channel][message_id]
+    hdl_info = g_channel_msgid_hdl[channel][message_id_channel]
     log.info('send_msg_response hdl_info =')
     log.info(hdl_info)
     # 用字典防止多次确认
@@ -119,7 +123,7 @@ def send_msg_response(channel, message_id, ws_handler, error=''):
         # 所有客户端都有返回或者超时
         if hdl_info['web_handle_response']:
             hdl_info['web_handle_response'](finish_count)
-        clear_msg_hdl(channel, message_id)
+        clear_msg_hdl(channel, message_id_channel)
 
 
 class Packet(object):
@@ -336,57 +340,45 @@ class WebSocketHandler(Handler):
 
         self.close_flag = True
 
-    # @classmethod
-    # def send_message(
-    #         cls, channel, message_type, data,
-    #         qos=0, timeout=0, web_handle_response=None):
-    #     if channel in WebSocketHandler.socket_handlers:
-    #         handlers = WebSocketHandler.socket_handlers[channel]
-    #         if not isinstance(handlers, list):
-    #             handlers = [handlers]
-
-    #         # 记录 消息 的回掉情况
-    #         client_count = len(handlers)
-    #         message_id = get_next_msgid(channel)
-    #       set_msg_hdl(channel, message_id, web_handle_response, client_count)
-
-    #         packet.message_id = message_id
-
-    #         if timeout > 1:
-    #             timeout = timeout - 1
-    #         for handler in handlers:
-    #             handler.send_packet(packet, timeout)
-    #     else:
-
     @classmethod
     def send_message(
         cls, channel, message_type, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         if handlers:
-            packet = Packet(command=Packet.PACKET_SEND,
-                            msg_type=message_type,
-                            data=data, qos=qos)
+
             # 记录 消息 的回调情况
             client_count = len(handlers)
-            message_id = get_next_msgid(channel)
-            set_msg_hdl(channel, message_id, web_handle_response, client_count)
-
-            packet.message_id = message_id
+            message_id_channel = get_next_msgid(channel)
+            set_msg_hdl(channel, message_id_channel,
+                        web_handle_response, client_count)
 
             if timeout > 1:
                 timeout = timeout - 1
             for identity, handler in handlers:
-                handler.send_packet(packet, timeout)
-
+                handler.send_packet(
+                    channel, message_id_channel,
+                    message_type, data, qos, timeout)
         else:
             # 没有客户端在线
             if web_handle_response:
                 web_handle_response(0)
 
-    def send_packet(self, packet, timeout):
+    def send_packet(
+            self, channel, message_id_channel,
+            message_type, data, qos=0, timeout=0):
         """此方法需要返回Future
         """
+        packet = Packet(command=Packet.PACKET_SEND,
+                        msg_type=message_type,
+                        data=data, qos=qos)
+        packet.message_id = self.gen_next_message_id()
+
+        # 因为一个 wshandler 可能存在多个 channel 中, 所以要各个 wshandler 维护 msg_id
+        # 还要 和 这次发送的 message_id_channel 保持好映射
+        # 建立映射的同时也要做好取消映射，节约内存
+        self.packet_msg_id_to_channel[packet.message_id] = message_id_channel
+
         if packet.qos == self.QOS_LEVEL1:
             self.write_message(packet.raw, binary=True)
         else:
@@ -548,6 +540,7 @@ class WebSocketHandler(Handler):
 
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
+            # 这里会 set future
             handle_response(packet)
 
     # 服务器主动发消息的返回
@@ -604,7 +597,6 @@ class WebSocketHandler(Handler):
         if toh:
             del self.rsp_timeout_hl[message_id]
         send_msg_response(self.channel, message_id, self, error='timeout')
-
 
     @classmethod
     def shutdown(cls):

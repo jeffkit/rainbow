@@ -24,10 +24,13 @@ redis_client = redis.Redis(
     settings.REDIS_PASSWORD)
 USER_ID_HASH = 'websocket_connected_users'
 
-# 每个channel 当前 migid, g_channel_msgid[channel] = message_id
+# 每个channel 当前 migid, g_channel_msgid[channel] = message_id_channel
 g_channel_msgid = {}
-# 每个channel 的 每一条message_id 的 future hdl,
-# g_channel_msgid_hdl[channel]={[message_id]=hdl, [message_id2]=hdl2}
+# webhandler那边过来的, 每个 channel 的 每一条 message_id_channel 的 future hdl,
+# g_channel_msgid_hdl[channel]={
+# [message_id_channel]=hdl,
+# [message_id_channel2]=hdl2
+# }
 g_channel_msgid_hdl = {}
 
 
@@ -40,12 +43,12 @@ def clear_channel_msg_data(channel):
 
 def get_next_msgid(channel):
     # 单线程？
-    message_id = g_channel_msgid.get(channel, 0)
-    if message_id >= 65535:
-        message_id = 0
-    message_id = message_id + 1
-    g_channel_msgid[channel] = message_id
-    return message_id
+    message_id_channel = g_channel_msgid.get(channel, 0)
+    if message_id_channel >= 65535:
+        message_id_channel = 0
+    message_id_channel = message_id_channel + 1
+    g_channel_msgid[channel] = message_id_channel
+    return message_id_channel
 
 
 def del_msgid_memory(channel):
@@ -53,19 +56,21 @@ def del_msgid_memory(channel):
         del g_channel_msgid[channel]
 
 
-def set_msg_hdl(channel, message_id, web_handle_response, client_count):
+def set_msg_hdl(
+        channel, message_id_channel, web_handle_response, client_count):
     if not web_handle_response:
         return
 
     message_id_list = g_channel_msgid_hdl.get(channel, {})
     if not message_id_list:
         g_channel_msgid_hdl[channel] = message_id_list
-    message_id_list[message_id] = {}
-    message_id_list[message_id]['web_handle_response'] = web_handle_response
+    message_id_list[message_id_channel] = {}
+    message_id_list[message_id_channel][
+        'web_handle_response'] = web_handle_response
     # 客户端回复 ack 或 rec 表示收到
-    message_id_list[message_id]['finish_list'] = {}
-    message_id_list[message_id]['error_list'] = {}
-    message_id_list[message_id]['client_count'] = client_count
+    message_id_list[message_id_channel]['finish_list'] = {}
+    message_id_list[message_id_channel]['error_list'] = {}
+    message_id_list[message_id_channel]['client_count'] = client_count
 
 
 def clear_msg_hdl(channel, message_id_channel):
@@ -294,18 +299,18 @@ class WebSocketHandler(Handler):
         self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
-    def update_handler(self):
-        """把当前handler增加到handler_map中。
-        """
-        handlers = self.socket_handlers.get(self.channel, None)
-        if handlers:
-            if isinstance(handlers, list):
-                if self not in handlers:
-                    self.socket_handlers[self.channel].append(self)
-            else:
-                self.socket_handlers[self.channel] = [handlers, self]
-        else:
-            self.socket_handlers[self.channel] = self
+    # def update_handler(self):
+    #     """把当前handler增加到handler_map中。
+    #     """
+    #     handlers = self.socket_handlers.get(self.channel, None)
+    #     if handlers:
+    #         if isinstance(handlers, list):
+    #             if self not in handlers:
+    #                 self.socket_handlers[self.channel].append(self)
+    #         else:
+    #             self.socket_handlers[self.channel] = [handlers, self]
+    #     else:
+    #         self.socket_handlers[self.channel] = self
 
     def on_close(self):
         """从handler_map移除掉handler
@@ -321,7 +326,7 @@ class WebSocketHandler(Handler):
         for channel in self.channels:
             handlers = self.socket_handlers.get(channel, None)
             if not handlers:
-                # 如果这个 channel 的客户端都close之后
+                # 如果这个 channel 的没有客户端
                 clear_channel_msg_data(self.channel)
 
         log.info('handlers after close %d' % len(self.socket_handlers2))
@@ -354,6 +359,7 @@ class WebSocketHandler(Handler):
                         web_handle_response, client_count)
 
             if timeout > 1:
+                # todo 处理重发的
                 timeout = timeout - 1
             for identity, handler in handlers:
                 handler.send_packet(
@@ -475,9 +481,7 @@ class WebSocketHandler(Handler):
     def on_packet_send(self, packet):
         """收到PACKET_SEND消息
         """
-        log.info('jjjjjjjjjjjjjjj')
         log.info('on_packet_send func')
-        log.info('jjjjjjjjjjjjjjj')
         http_client = AsyncHTTPClient()
         # http_client = HTTPClient()
         headers = {'content-type': 'application/json'}

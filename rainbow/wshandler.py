@@ -250,6 +250,7 @@ class WebSocketHandler(Handler):
             redis_client.hsetnx(USER_ID_HASH, self.uid, 1)
         except:
             pass
+        set_identity_hdl(self.identity, self)
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
@@ -283,6 +284,7 @@ class WebSocketHandler(Handler):
 
         self.future_rsp_hl = None
         self.rsp_timeout_hl = None
+        clear_identity_hdl(self.identity, self)
 
     def update_handler(self):
         """把当前handler增加到handler_map中。
@@ -418,7 +420,6 @@ class WebSocketHandler(Handler):
         log.info(url)
         # url = g_CONFIG['forward_url'] + str(packet.message_type) + '/'
         log.info('url = %s' % url)
-        # todo  packet在上一步是否可以不用 json.loads
         # body = json.dumps(packet.data)
         body = packet.data
         req = HTTPRequest(
@@ -456,6 +457,7 @@ class WebSocketHandler(Handler):
             log.info('elif packet.qos == 2 5')
         # todo
         # http回来前, websocket 已经关闭, 是什么效果
+        # on_close已经把 futrue 回复了一个close
         log.info('rp.raw = ')
         log.info(rp.raw)
         log.info('len(rp.raw) = ')
@@ -611,13 +613,18 @@ class WebSocketHandler(Handler):
         """
         self.handler_init()
         log.info(u'get func 在打开websocket前先进行权限校验，如果没权限直接断开连接')
-        response = yield self.valid_request()
-        body = json.loads(response.body)
-        log.info(u'get func body = %s' % body)
-        if body['status'] == 'success':
-            self.uid = body['uid']
-        uid = getattr(self, 'uid', None)
-        if not uid:
+
+        req = self.get_valid_req_params()
+        if req:
+            response = yield self.valid_request(req)
+            body = json.loads(response.body)
+            log.info(u'get func body = %s' % body)
+            if body['status'] == 'success':
+                self.uid = body.get('uid')
+                self.channel = body['channel']
+
+        channel = getattr(self, 'channel', None)
+        if not channel:
             log.warn('invalid request, close!')
             self.set_status(401)
             self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
@@ -625,23 +632,56 @@ class WebSocketHandler(Handler):
         super(WebSocketHandler, self).get(*args, **kwds)
 
     def check_origin(self, origin):
-        """ 在 get 会验证 uid，这里返回 True就可以
+        """ 在 get 会去验证 connect 这里返回 True就可以
         """
-
         return True
 
-    def valid_request(self):
+    def valid_request(self, req):
         """检查该请求是否合法，如果合法则返回uid，否则为空。
         """
         log.info('valid_request func')
-        self.request.headers['HTTP_X_HHHHHHHH'] = 'gggggg'
-        log.info(self.request.headers)
-        log.info('type headers = %s' % type(self.request.headers))
-        # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
+
         http_client = AsyncHTTPClient()
-        # http_client = HTTPClient()
-        url = g_CONFIG['auth_url']
-        # AssertionError: Body must not be empty for "POST" request
-        req = HTTPRequest(
-            url=url, method='GET', headers=self.request.headers)
         return http_client.fetch(req)
+
+    def get_valid_req_params(self):
+        headers = self.request.headers
+        deviceid1 = headers.get('HTTP_X_DEVICEID')
+        deviceid2 = headers.get('Http_x_deviceid')
+        deviceid = headers.get(deviceid1) or headers.get(deviceid2) or ''
+        platform1 = 'HTTP_X_CLIENT_OS'
+        platform2 = 'Http_x_client_os'
+        platform = headers.get(platform1) or headers.get(platform2) or ''
+        if not deviceid or not platform:
+            return None
+
+        from hashlib import sha256
+        self.identity = sha256(
+            deviceid + platform + str(time.time())).hexdigest()
+        log.info(self.request.headers)
+        # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
+
+        url = g_CONFIG['connect_url']
+
+        data = {'identity': self.identity}
+        body = json.dumps(data)
+        headers['content-type'] = 'application/json'
+
+        req = HTTPRequest(
+            url=url, body=body, method='POST', headers=headers)
+        log.debug('dir(req) = %s' % dir(req))
+
+        return req
+
+g_identity_wshandler = {}
+
+
+def set_identity_hdl(identity, wshandler):
+    """ 用户 sub/unsub 的时候，根据 identity 找到 wshandler
+    """
+    wshandler[identity] = wshandler
+
+
+def clear_identity_hdl(identity, wshandler):
+    if wshandler.get(identity):
+        del wshandler[identity]

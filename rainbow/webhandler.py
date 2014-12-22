@@ -63,24 +63,20 @@ class SendMessageHandler(tornado.web.RequestHandler):
         {'status': -123, 'msg': 'timeout'}
         """
         log.info('post ' * 5)
-        uid = self.get_query_argument('uid', '')
-        log.info('uid = %s' % uid)
-        if not uid:
-            uid = 'uuiidd'
-        # msg_type = self.get_query_argument('msg_type')
-        # data = self.get_query_argument('data')
+        channel = self.get_query_argument('channel', '')
+        log.info('channel = %s' % channel)
+        if not channel:
+            channel = 'uuiidd'
+        msg_type = int(self.get_query_argument('msg_type', '1'))
         qos = int(self.get_query_argument('qos', 2))
-        # timeout = int(self.get_query_argument('timeout', 10))
-        # uid = 'uuiidd'
-        msg_type = 1
+        self.qos = qos
+        timeout = int(self.get_query_argument('timeout', '10'))
         data = self.request.body
-        # qos = 2
-        timeout = 10
 
         # 如果是集群模式，则直接调用其他服务器的接口。
         # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
 
-        fetch_msg(uid, msg_type, data, qos, timeout, self.send_finish)
+        fetch_msg(channel, msg_type, data, qos, timeout, self.send_finish)
 
         self.toh = IOLoop.current().add_timeout(time.time() + timeout or 10,
                                                 self.handle_timeout)
@@ -90,10 +86,46 @@ class SendMessageHandler(tornado.web.RequestHandler):
         """
         if getattr(self, 'timeout', None):
             return
+
         IOLoop.current().remove_timeout(self.toh)
-        self.finish(json.dumps({'status': 0, 'connections': response}))
+
+        data = {'status': 0}
+        if self.qos > 0:
+            data['connections'] = response
+        data = json.dumps(data)
+        self.finish(data)
 
     def handle_timeout(self):
         # 虽然超时，但是是否能够知道有部份成功发送？
         self.timeout = True
         self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
+
+
+class SubChannelHandler(tornado.web.RequestHandler):
+
+    @tornado.web.asynchronous
+    def post(self):
+        data = json.loads(self.request.body)
+        identity = data.get('identity')
+        channel = data.get('channel')
+        if not identity or not channel:
+            self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
+
+        # sub
+
+        self.write(json.dumps({'status': 0}))
+
+
+class UnSubChannelHandler(tornado.web.RequestHandler):
+
+    @tornado.web.asynchronous
+    def post(self):
+        data = json.loads(self.request.body)
+        identity = data.get('identity')
+        channel = data.get('channel')
+        if not identity or not channel:
+            self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
+
+        # unsub
+
+        self.write(json.dumps({'status': 0}))

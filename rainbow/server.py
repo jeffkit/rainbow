@@ -11,6 +11,8 @@ from tornado.httpserver import HTTPServer
 
 from wshandler import WebSocketHandler
 from webhandler import SendMessageHandler
+from webhandler import SubChannelHandler
+from webhandler import UnSubChannelHandler
 
 
 from config import g_CONFIG
@@ -28,7 +30,7 @@ def init_config():
     try:
         config = ConfigParser.SafeConfigParser()
         config.read(config_filename)
-        g_CONFIG['auth_url'] = config.get("main", "auth_url")
+        g_CONFIG['connect_url'] = config.get("main", "connect_url")
         g_CONFIG['socket_port'] = int(config.get("main", "socket_port"))
         g_CONFIG['http_port'] = config.get("main", "http_port")
         g_CONFIG['security_key'] = config.get("main", "security_key")
@@ -49,6 +51,8 @@ application = tornado.web.Application([
 
     # for HTTP
     (r'/send/', SendMessageHandler),
+    (r'/sub/', SubChannelHandler),
+    (r'/unsub/', UnSubChannelHandler),
 ])
 
 

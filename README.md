@@ -36,6 +36,7 @@ RainBow服务器
 
 ### 配置
 修改/etc/rainbow/server.ini
+
 	[main]
 	# 连接验证接口, 用于对连接上来的客户端进行鉴权，失败者不能建立连接
 	connect_url = http://localhost:8000/connect/

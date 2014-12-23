@@ -704,6 +704,7 @@ class WebSocketHandler(Handler):
         url = g_CONFIG['connect_url']
 
         data = {'identity': self.identity}
+        log.info('data = %s' % data)
         body = json.dumps(data)
         headers['content-type'] = 'application/json'
 

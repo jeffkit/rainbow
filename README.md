@@ -84,7 +84,14 @@ body, json格式 {'identity': 'xxxx'}。 identity为一个客户端连接到rain
 
 	{'status': 'fail'}
 
-此接口需要作为Rainbow的auth_url配置。
+此接口需要作为Rainbow的 connect_url 配置。
+
+
+#### 客户端关闭回调接口
+方法 post 
+body json格式 {'identity': 'xxxx'}
+
+此接口需要作为Rainbow的 close_url 配置。
 
 #### 消息回调接口
 

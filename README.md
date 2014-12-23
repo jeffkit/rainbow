@@ -55,6 +55,9 @@ RainBow服务器
 	# 上行时 url将会是 http://localhost:8000/chat/{message_type}/
 	forward_url = http://localhost:8000/chat/
 
+	# 客户端关闭连接的通知接口
+	close_url = http://localhost:8000/close/
+
 
 ### 运行
 	./rainbow-server -f /etc/rainbow/server.ini
@@ -87,7 +90,7 @@ body, json格式 {'identity': 'xxxx'}。 identity为一个客户端连接到rain
 
 客户端每上行一条消息，Rainbow都会转发至该接口，消息的类型会通过URL传递过来，消息体参数则会通过Json的方式POST过来。
 
-该接口的URL请预留部份给Rainbow传递消息类型。 如 http://localhost:8000/chat/{{message_type}}/
+该接口的URL请预留部份给Rainbow传递消息类型。 如 http://localhost:8000/chat/message_type/ message_type为0至65535的数字
 
 此接口需要作为RainBow的forward_url配置
 
@@ -95,13 +98,15 @@ body, json格式 {'identity': 'xxxx'}。 identity为一个客户端连接到rain
 	
 使用Rainbow的服务端 SDK或直接调用http请求均可。rainbow只暴露一个消息接口：
 
-	/send/?message_type=xxx&channel=yyyy
+	/send/?msgtype=xxx&channel=yyyy&qos=1&timeout=5
 
 	方法: POST
 
 	参数: 
-	- message_typ, 消息类型
-	- channel，接收消息的客户端channel
+	- msgtype, 消息类型
+	- channel, 接收消息的客户端channel
+	- qos, 通讯质量
+	- timeout, 超时
 	post body: JSON数据。
 	
 	返回：
@@ -118,6 +123,7 @@ body, json格式 {'identity': 'xxxx'}。 identity为一个客户端连接到rain
 	/unsub/
 	方法 post
 	body, json {'identity': 'xxx', 'channel': 'xxx'}
+
 
 客户端
 ---

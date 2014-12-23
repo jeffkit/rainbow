@@ -68,7 +68,7 @@ class SendMessageHandler(tornado.web.RequestHandler):
         log.info('channel = %s' % channel)
         if not channel:
             channel = 'uuiidd'
-        msg_type = int(self.get_query_argument('msg_type', '1'))
+        msgtype = int(self.get_query_argument('msgtype', '1'))
         qos = int(self.get_query_argument('qos', 2))
         self.qos = qos
         timeout = int(self.get_query_argument('timeout', '10'))
@@ -77,7 +77,7 @@ class SendMessageHandler(tornado.web.RequestHandler):
         # 如果是集群模式，则直接调用其他服务器的接口。
         # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
 
-        fetch_msg(channel, msg_type, data, qos, timeout, self.send_finish)
+        fetch_msg(channel, msgtype, data, qos, timeout, self.send_finish)
 
         self.toh = IOLoop.current().add_timeout(time.time() + timeout or 10,
                                                 self.handle_timeout)

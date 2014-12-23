@@ -67,7 +67,7 @@ RainBow服务器
 
 业务服务器会主动调用Rainbow的接口，它的接口也会被Rainbow调用。接口调用的鉴权使用同样的逻辑。鉴权逻辑将稍后作详尽说明。
 
-### 实现接口
+#### 实现接口
 
 业务服务器需要至少实现两个接口。
 
@@ -78,7 +78,7 @@ body, json格式 {'identity': 'xxxx'}。 identity为一个客户端连接到rain
 返回值:
 	channel可选
 
-	{'status': 'success', 'channel': 'channel1'}
+	{'status': 'success'}
 	
 不合法则返回错误状态：
 

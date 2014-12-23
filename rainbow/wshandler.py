@@ -3,13 +3,14 @@ import time
 import json
 import struct
 import traceback
+from hashlib import sha256
 
 import tornado
 from tornado.websocket import WebSocketHandler as Handler
 from tornado.concurrent import TracebackFuture
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
-# from tornado.httpclient import HTTPClient
+from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
 from tornado.websocket import WebSocketClosedError
 import redis
@@ -160,8 +161,6 @@ class Packet(object):
                 return
 
             command = (meta[0] & 0xF0) / 16
-            log.info('Packet __init__ command = ')
-            log.info(command)
             if command not in [
                     self.PACKET_RESERVED,
                     self.PACKET_SEND,
@@ -170,9 +169,10 @@ class Packet(object):
                     self.PACKET_REL,
                     self.PACKET_COM]:
                 self._valid = False
-                log.error(u' 心跳吗 return')
+                # log.error(u' 心跳吗 return')
                 return
-
+            log.info('Packet __init__ command = ')
+            log.info(command)
             if command == self.PACKET_RESERVED:
                 self._valid = False
                 log.error('return 2')
@@ -269,10 +269,22 @@ class WebSocketHandler(Handler):
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
+        log.info('handler_init func')
         self.future_rsp_hl = {}
         self.rsp_timeout_hl = {}
         self.pendding_message_ids = []
         self.received_message_ids = []
+        self.next_message_id = 0
+        self.packet_msg_id_to_channel = {}
+        self.channels = []
+
+    def gen_next_message_id(self):
+        if self.next_message_id >= 65534:
+            self.next_message_id = 1
+        else:
+            self.next_message_id = self.next_message_id + 1
+
+        return self.next_message_id
 
     def handler_close(self):
         log.info('handler_close self.rsp_timeout_hl =')
@@ -300,29 +312,18 @@ class WebSocketHandler(Handler):
         self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
+    @tornado.gen.coroutine
     def on_close(self):
         """从handler_map移除掉handler
         """
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
-        log.info("+++++" * 10)
+        log.info("on_close ***************************\n")
+        log.info("on_close ***************************\n")
+        log.info("on_close ***************************\n")
         log.info('on_close will close handler for user')
-        # log.info('on_close handlers defore close %d' %
-        #          len(self.socket_handlers2))
 
         try:
-            yield self.on_close_cb()
+            rsp = yield self.on_close_cb()
+            log.debug(dir(rsp))
         except Exception, e:
             log.error(e)
             log.error(traceback.format_exc())
@@ -332,12 +333,13 @@ class WebSocketHandler(Handler):
         self.channel_on_close()
 
         for channel in self.channels:
-            handlers = self.socket_handlers.get(channel, None)
+            handlers = WebSocketHandler.socket_handlers2.get(channel, None)
             if not handlers:
                 # 如果这个 channel 的没有客户端
                 clear_channel_msg_data(self.channel)
 
-        log.info('handlers after close %d' % len(self.socket_handlers2))
+        log.info('handlers after close %d' %
+                 len(WebSocketHandler.socket_handlers2))
 
         # todo 这个用来干嘛的
         # try:
@@ -358,6 +360,8 @@ class WebSocketHandler(Handler):
         cls, channel, message_type, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
+        log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
         if handlers:
 
             # 记录 消息 的回调情况
@@ -369,7 +373,7 @@ class WebSocketHandler(Handler):
             if timeout > 1:
                 # todo 处理重发的
                 timeout = timeout - 1
-            for identity, handler in handlers:
+            for identity, handler in handlers.iteritems():
                 handler.send_packet(
                     channel, message_id_channel,
                     message_type, data, qos, timeout)
@@ -414,7 +418,8 @@ class WebSocketHandler(Handler):
                     # 客户端不发 ack 而直接 close 会怎么样, handler_close 函数会有效果吗
                     # add_callback 的数据，如果 timeout 了，内存是如何清空
                 IOLoop.current().add_callback(
-                    self.send_packet_cb, message_id, packet, exception)
+                    self.send_packet_cb, channel,
+                    message_id, packet, exception)
             future.add_done_callback(handle_future)
 
             def handle_response(packet=None, exception=None):
@@ -434,6 +439,7 @@ class WebSocketHandler(Handler):
             toh = IOLoop.current().add_timeout(
                 time.time() + timeout,
                 self.send_packet_cb_timeout,
+                channel,
                 message_id)
             log.info('send_packet  toh = ')
             log.info(toh)
@@ -459,6 +465,9 @@ class WebSocketHandler(Handler):
         - send_release
         - send_complete
         """
+        log.info("***************************")
+        log.info("***************************")
+        log.info("***************************")
         log.info('on_message')
         log.info(message)
         try:
@@ -467,7 +476,7 @@ class WebSocketHandler(Handler):
                 return
             pck = Packet(raw=message)
             if not pck.valid:
-                log.error('if not pck.valid')
+                # log.error('if not pck.valid')
                 return
             # for test
             # pas
@@ -598,7 +607,7 @@ class WebSocketHandler(Handler):
             self.pendding_message_ids.remove(packet.message_id)
 
     # 服务器主动发消息成功后的回调
-    def send_packet_cb(self, message_id, packet, exception):
+    def send_packet_cb(self, channel, message_id, packet, exception):
         log.info('send_packet_cb func')
         if self.rsp_timeout_hl:
             # 如果是on_close 触发的 回调，就已经去掉timeout了
@@ -606,15 +615,15 @@ class WebSocketHandler(Handler):
             if toh:
                 IOLoop.current().remove_timeout(toh)
                 del self.rsp_timeout_hl[message_id]
-        send_msg_response(self.channel, message_id, self, error=exception)
+        send_msg_response(channel, message_id, self, error=exception)
 
     # 服务器主动发消息后的超时
-    def send_packet_cb_timeout(self, message_id):
+    def send_packet_cb_timeout(self, channel, message_id):
         log.info('send_packet_cb_timeout func')
         toh = self.rsp_timeout_hl.get(message_id)
         if toh:
             del self.rsp_timeout_hl[message_id]
-        send_msg_response(self.channel, message_id, self, error='timeout')
+        send_msg_response(channel, message_id, self, error='timeout')
 
     @classmethod
     def shutdown(cls):
@@ -633,21 +642,28 @@ class WebSocketHandler(Handler):
         # todo shutdown 会调用 on_close 吗
 
     def channel_add(self, channel):
+        log.info('channel_add func')
         self.channels.append(channel)
 
-        handlers = self.socket_handlers2.get(channel, None)
+        log.info('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
+
+        handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         if handlers:
             handlers[self.identity] = self
         else:
-            self.socket_handlers2 = {}
-            self.socket_handlers2[self.identity] = self
+            WebSocketHandler.socket_handlers2[channel] = {}
+            WebSocketHandler.socket_handlers2[channel][self.identity] = self
+        log.info('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
 
     def channel_remove(self, channel):
+        log.info('channel_remove func')
         self._channel_remove(channel)
         self.channels.remove(channel)
 
     def _channel_remove(self, channel):
-        handlers = self.socket_handlers2.get(channel, None)
+        handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         if handlers:
             hdl = handlers.get(self.identity)
             if hdl:
@@ -673,11 +689,11 @@ class WebSocketHandler(Handler):
                 log.info(u'get func body = %s' % body)
                 if body['status'] == 'success':
                     connect_flag = True
-                    self.uid = body.get('uid')
-                    channel = body.get('channel')
-                    self.channels = []
-                    if channel:
-                        self.channel_add(channel)
+                    # self.uid = body.get('uid')
+                    # channel = body.get('channel')
+                    # self.channels = []
+                    # if channel:
+                    #     self.channel_add(channel)
             except Exception, e:
                 log.info(e)
                 log.info(traceback.format_exc())
@@ -687,11 +703,13 @@ class WebSocketHandler(Handler):
             self.set_status(401)
             self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
             return
+        log.info('super(WebSocketHandler, self).get(*args, **kwds)')
         super(WebSocketHandler, self).get(*args, **kwds)
 
     def check_origin(self, origin):
         """ 在 get 会去验证 connect 这里返回 True就可以
         """
+        log.info('check_origin func')
         return True
 
     def valid_request(self, req):
@@ -703,6 +721,7 @@ class WebSocketHandler(Handler):
         return http_client.fetch(req)
 
     def on_close_cb(self):
+        log.info('on_close_cb func')
         url = g_CONFIG['close_url']
 
         data = {'identity': self.identity}
@@ -722,9 +741,9 @@ class WebSocketHandler(Handler):
         platform2 = 'Http_x_client_os'
         platform = headers.get(platform1) or headers.get(platform2) or ''
         if not deviceid or not platform:
-            return None
+            # return None
+            pass
 
-        from hashlib import sha256
         self.identity = sha256(
             deviceid + platform + str(time.time())).hexdigest()
         log.info(self.request.headers)

@@ -35,6 +35,7 @@ def init_config():
         g_CONFIG['http_port'] = config.get("main", "http_port")
         g_CONFIG['security_key'] = config.get("main", "security_key")
         g_CONFIG['forward_url'] = config.get("main", "forward_url")
+        g_CONFIG['close_url'] = config.get("main", "close_url")
     except:
         return False
 

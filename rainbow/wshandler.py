@@ -2,6 +2,7 @@
 import time
 import json
 import struct
+import traceback
 
 import tornado
 from tornado.websocket import WebSocketHandler as Handler
@@ -264,6 +265,7 @@ class WebSocketHandler(Handler):
         #     pass
 
         set_identity_hdl(self.identity, self)
+        log.info('Open connection for %s finish' % self.identity)
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
@@ -290,7 +292,6 @@ class WebSocketHandler(Handler):
             try:
                 handle_response(exception='on_close')
             except Exception, e:
-                import traceback
                 log.error('handler_close exception')
                 log.error(e)
                 log.error(traceback.format_exc())
@@ -299,25 +300,32 @@ class WebSocketHandler(Handler):
         self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
-    # def update_handler(self):
-    #     """把当前handler增加到handler_map中。
-    #     """
-    #     handlers = self.socket_handlers.get(self.channel, None)
-    #     if handlers:
-    #         if isinstance(handlers, list):
-    #             if self not in handlers:
-    #                 self.socket_handlers[self.channel].append(self)
-    #         else:
-    #             self.socket_handlers[self.channel] = [handlers, self]
-    #     else:
-    #         self.socket_handlers[self.channel] = self
-
     def on_close(self):
         """从handler_map移除掉handler
         """
-        log.info('on_close will close handler for user %s' % self.channel)
-        log.info('on_close handlers defore close %d' %
-                 len(self.socket_handlers2))
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info("+++++" * 10)
+        log.info('on_close will close handler for user')
+        # log.info('on_close handlers defore close %d' %
+        #          len(self.socket_handlers2))
+
+        try:
+            yield self.on_close_cb()
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())
 
         self.handler_close()
 
@@ -496,8 +504,14 @@ class WebSocketHandler(Handler):
         req = HTTPRequest(
             url=url, method='POST', body=body, headers=headers)
         log.info('after HTTPRequest')
-        response = yield http_client.fetch(req)
-        # response = http_client.fetch(req)
+        try:
+            response = yield http_client.fetch(req)
+        except Exception, e:
+            log.info(e)
+            log.info(traceback.format_exc())
+            # todo 重试?
+            return
+
         log.info('response.code = ')
         log.info(response.code)
         data = response.body or None
@@ -653,19 +667,23 @@ class WebSocketHandler(Handler):
         connect_flag = False
         req = self.get_valid_req_params()
         if req:
-            response = yield self.valid_request(req)
-            body = json.loads(response.body)
-            log.info(u'get func body = %s' % body)
-            if body['status'] == 'success':
-                connect_flag = True
-                self.uid = body.get('uid')
-                channel = body.get('channel')
-                self.channels = []
-                if channel:
-                    self.channel_add(channel)
+            try:
+                response = yield self.valid_request(req)
+                body = json.loads(response.body)
+                log.info(u'get func body = %s' % body)
+                if body['status'] == 'success':
+                    connect_flag = True
+                    self.uid = body.get('uid')
+                    channel = body.get('channel')
+                    self.channels = []
+                    if channel:
+                        self.channel_add(channel)
+            except Exception, e:
+                log.info(e)
+                log.info(traceback.format_exc())
 
         if not connect_flag:
-            log.warn('invalid request, close!')
+            log.warning('invalid request, close!')
             self.set_status(401)
             self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
             return
@@ -681,6 +699,17 @@ class WebSocketHandler(Handler):
         """
         log.info('valid_request func')
 
+        http_client = AsyncHTTPClient()
+        return http_client.fetch(req)
+
+    def on_close_cb(self):
+        url = g_CONFIG['close_url']
+
+        data = {'identity': self.identity}
+        body = json.dumps(data)
+        headers = {'content-type': 'application/json'}
+        req = HTTPRequest(
+            url=url, body=body, method='POST', headers=headers)
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
 
@@ -710,7 +739,6 @@ class WebSocketHandler(Handler):
 
         req = HTTPRequest(
             url=url, body=body, method='POST', headers=headers)
-        log.debug('dir(req) = %s' % dir(req))
 
         return req
 

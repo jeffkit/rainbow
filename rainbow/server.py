@@ -95,7 +95,7 @@ def main():
         return
 
     default_port = g_CONFIG.get('socket_port') or 1984
-    # todo http 和 websocket 不是公用一个port咩
+    # todo http 和 websocket 不是共用一个port咩
     standalone = True
 
     server = HTTPServer(application)

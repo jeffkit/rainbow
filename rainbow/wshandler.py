@@ -686,8 +686,8 @@ class WebSocketHandler(Handler):
 
     def get_valid_req_params(self):
         headers = self.request.headers
-        deviceid1 = headers.get('HTTP_X_DEVICEID')
-        deviceid2 = headers.get('Http_x_deviceid')
+        deviceid1 = 'HTTP_X_DEVICEID'
+        deviceid2 = 'Http_x_deviceid'
         deviceid = headers.get(deviceid1) or headers.get(deviceid2) or ''
         platform1 = 'HTTP_X_CLIENT_OS'
         platform2 = 'Http_x_client_os'

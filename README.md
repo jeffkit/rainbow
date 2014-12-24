@@ -133,7 +133,8 @@ Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至�
 ### 订阅接口, 为客户端订阅某个channel
 	/sub/
 	方法 post
-	body, json {'identity': 'xxx', 'channel': 'xxx'}
+	body, json {'identity': 'xxx', 'channel': 'xxx', 'occupy': 1}
+	occupy 可选，表示这个 identity 独占这个 channel
 
 
 ### 取消订阅接口, 为客户端取消订阅某个channel

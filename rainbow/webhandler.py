@@ -111,10 +111,13 @@ class SubChannelHandler(tornado.web.RequestHandler):
         data = json.loads(self.request.body)
         identity = data.get('identity')
         channel = data.get('channel')
+        occupy = data.get('occupy', False)
+        if occupy:
+            occupy = True
         if not identity or not channel:
             self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
 
-        ret, errmsg = sub(identity, channel)
+        ret, errmsg = sub(identity, channel, occupy)
         data = {}
         if ret:
             data['status'] = 0

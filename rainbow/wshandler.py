@@ -657,6 +657,18 @@ class WebSocketHandler(Handler):
             if hdl:
                 del handlers[self.identity]
 
+    def channel_occupy(self, channel):
+        """ 独占这个channel
+            将所有其它连接退订这个channel
+            然后把自己订阅这个channel
+        """
+        handlers = WebSocketHandler.socket_handlers2.get(channel, None)
+        if handlers:
+            for _, wshandler in handlers.iteritems():
+                wshandler.channels.remove(channel)
+            del WebSocketHandler.socket_handlers2[channel]
+        self.channel_add(channel)
+
     def channel_on_close(self):
         for channel in self.channels:
             self._channel_remove(channel)
@@ -765,6 +777,7 @@ class WebSocketHandler(Handler):
             self.channel_add(channel)
 
 
+# identity 与 websocket handler 的映射
 g_identity_wshandler = {}
 
 
@@ -779,10 +792,15 @@ def clear_identity_hdl(identity, wshandler):
         del g_identity_wshandler[identity]
 
 
-def sub(identity, channel):
+def sub(identity, channel, occupy=False):
+    """ occupy 是否独占这个channel
+    """
     wshandler = g_identity_wshandler.get(identity)
     if wshandler:
-        wshandler.channel_add(channel)
+        if occupy:
+            wshandler.channel_occupy(channel)
+        else:
+            wshandler.channel_add(channel)
         return True, None
     log.warning('no such identity = %s' % identity)
     return False, 'no such connection'

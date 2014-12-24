@@ -48,7 +48,7 @@ RainBow服务器
 	http_port = 2501  
 	
 	# 用于与业务逻辑服务器相互调用时签名的token
-	security_key = xxxxxxx 
+	security_token = xxxxxxx 
 	
 	# 客户端上行的消息，转发至业务服务器的入口地址模板，需要提供{{message_type}}占位参数。
 	# RainBow会将上行的消息类型填充至该模板，并以POST JSON的方式将消息参数传递过去。

@@ -78,6 +78,7 @@ RainBow服务器
 
 ### 连接验证接口
 Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至该接口，接口判断所带上来的Header，参数等是否合法，如果合法则返回一个json，包含标识客户端的唯一标识，可以是用户id或设备id等
+
 	方法 get
 	返回值:
 		channel可选

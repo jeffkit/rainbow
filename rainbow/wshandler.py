@@ -755,6 +755,7 @@ class WebSocketHandler(Handler):
         url = '%s?%s' % (url, params_str)
         log.info('make_request make_request make_request')
         log.info('url = %s' % url)
+        log.info('headers = %s' % headers)
         req = HTTPRequest(
             url=url, method=method, headers=headers, body=body)
         return req

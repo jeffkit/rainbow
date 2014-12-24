@@ -60,14 +60,21 @@ def is_signature(request):
 
 def error_rsp(request_handler, status, msg):
     data = json.dumps({'status': status, 'msg': msg})
-    request_handler.write(data)
+    request_handler.finish(data)
 
 
-class SendMessageHandler(tornado.web.RequestHandler):
+class WebHandler(tornado.web.RequestHandler):
+    def prepare(self):
+        if not is_signature(self):
+            return error_rsp(self, 1, 'signature error')
+        return super(WebHandler, self).prepare()
+
+
+class SendMessageHandler(WebHandler):
 
     @tornado.web.asynchronous
     def get(self):
-        self.write('ok')
+        self.finish('ok')
 
     @tornado.web.asynchronous
     def post(self):
@@ -88,11 +95,6 @@ class SendMessageHandler(tornado.web.RequestHandler):
         {'status': -123, 'msg': 'timeout'}
         """
         log.info('post ' * 5)
-
-        if not is_signature(self):
-            error_rsp(self, 1, 'signature error')
-            return
-
         channel = self.get_query_argument('channel', '')
         log.info('channel = %s' % channel)
         if not channel:
@@ -133,14 +135,10 @@ class SendMessageHandler(tornado.web.RequestHandler):
         self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
 
 
-class SubChannelHandler(tornado.web.RequestHandler):
+class SubChannelHandler(WebHandler):
 
     @tornado.web.asynchronous
     def post(self):
-        if not is_signature(self):
-            error_rsp(self, 1, 'signature error')
-            return
-
         data = json.loads(self.request.body)
         identity = data.get('identity')
         channel = data.get('channel')
@@ -148,7 +146,7 @@ class SubChannelHandler(tornado.web.RequestHandler):
         if occupy:
             occupy = True
         if not identity or not channel:
-            self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
+            return error_rsp(self, 1, 'params error')
 
         ret, errmsg = sub(identity, channel, occupy)
         data = {}
@@ -158,22 +156,18 @@ class SubChannelHandler(tornado.web.RequestHandler):
             data['status'] = 1
             data['msg'] = errmsg
 
-        self.write(json.dumps(data))
+        self.finish(json.dumps(data))
 
 
-class UnSubChannelHandler(tornado.web.RequestHandler):
+class UnSubChannelHandler(WebHandler):
 
     @tornado.web.asynchronous
     def post(self):
-        if not is_signature(self):
-            error_rsp(self, 1, 'signature error')
-            return
-
         data = json.loads(self.request.body)
         identity = data.get('identity')
         channel = data.get('channel')
         if not identity or not channel:
-            self.write(json.dumps({'status': 1, 'msg': 'params wrong'}))
+            return error_rsp(self, 1, 'params error')
 
         ret, errmsg = unsub(identity, channel)
         data = {}
@@ -183,4 +177,4 @@ class UnSubChannelHandler(tornado.web.RequestHandler):
             data['status'] = 1
             data['msg'] = errmsg
 
-        self.write(json.dumps(data))
+        self.finish(json.dumps(data))

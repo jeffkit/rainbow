@@ -722,6 +722,8 @@ class WebSocketHandler(Handler):
             return None
 
         identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
+
+        log.info('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()
 
         log.info('self.request.headers = ')

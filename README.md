@@ -69,33 +69,32 @@ RainBow服务器
 
 #### 接口
 
-自定义header参数
-RAINBOW_CLIENT_CHANNEL, rainbow收到这个，表示给当前的websocket handler添加 channel
-RAINBOW_CLIENT_COOKIE, rainbow存放业务调用方的状态信息, 状态信息需要base64后再发到rainbow
-RAINBOW_CLIENT_IDENTITY, 为一个客户端连接到rainbow的唯一标识
+	自定义header参数
+	RAINBOW_CLIENT_CHANNEL, rainbow收到这个，表示给当前的websocket handler添加 channel
+	RAINBOW_CLIENT_COOKIE, rainbow存放业务调用方的状态信息, 状态信息需要base64后再发到rainbow
+	RAINBOW_CLIENT_IDENTITY, 为一个客户端连接到rainbow的唯一标识
 
 业务服务器需要实现以下接口。
 
 ### 连接验证接口
-Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至该接口，接口判断所带上来的Header，参数等是否合法，如果合法则返回一个json，包含标识客户端的唯一标识，可以是用户id或设备id等
-方法 get
-返回值:
-	channel可选
+	Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至该接口，接口判断所带上来的Header，参数等是否合法，如果合法则返回一个json，包含标识客户端的唯一标识，可以是用户id或设备id等
+	方法 get
+	返回值:
+		channel可选
 
-	{'status': 'success'}
+		{'status': 'success'}
 	
-不合法则返回错误状态：
+	不合法则返回错误状态：
 
-	{'status': 'fail'}
+		{'status': 'fail'}
 
-此接口需要作为Rainbow的 connect_url 配置。
+	此接口需要作为Rainbow的 connect_url 配置。
 
 
 ### 客户端关闭回调接口
-方法 get 
-body json格式
+	方法 get 
 
-此接口需要作为Rainbow的 close_url 配置。
+	此接口需要作为Rainbow的 close_url 配置。
 
 
 ### 消息回调接口

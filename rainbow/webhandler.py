@@ -64,6 +64,7 @@ def error_rsp(request_handler, status, msg):
 
 
 class WebHandler(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
     def prepare(self):
         if not is_signature(self):
             return error_rsp(self, 1, 'signature error')

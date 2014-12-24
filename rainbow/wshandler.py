@@ -464,9 +464,6 @@ class WebSocketHandler(Handler):
         - send_release
         - send_complete
         """
-        log.info("***************************")
-        log.info("***************************")
-        log.info("***************************")
         log.info('on_message')
         log.info(message)
         try:
@@ -477,12 +474,6 @@ class WebSocketHandler(Handler):
             if not pck.valid:
                 # log.error('if not pck.valid')
                 return
-
-            # for test
-            # pck.command = 1
-            # pck.qos = 2
-            # pck.data = "{'haha': 'jjj'}"
-            # pck.dup = 0
 
             {Packet.PACKET_SEND: self.on_packet_send,
              Packet.PACKET_ACK: self.on_packet_ack,
@@ -713,6 +704,33 @@ class WebSocketHandler(Handler):
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
 
+    def get_valid_req_params(self):
+        log.info('get_valid_req_params func')
+        log.info(self.request.arguments)
+        headers = self.request.headers
+        deviceid1 = 'X_DEVICEID'
+        deviceid2 = 'X_deviceid'
+        deviceid = headers.get(deviceid1) or headers.get(
+            deviceid2) or self.get_query_argument(deviceid1, '')
+        platform1 = 'X_CLIENT_OS'
+        platform2 = 'X_client_os'
+        platform = headers.get(platform1) or headers.get(
+            platform2) or self.get_query_argument(platform1, '')
+        if not deviceid or not platform:
+            log.warning('if not deviceid or not platform')
+            return None
+
+        identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
+        self.identity = sha256(identity_raw).hexdigest()
+
+        log.info('self.request.headers = ')
+        log.info(self.request.headers)
+
+        req = self.make_request(
+            g_CONFIG['connect_url'], 'GET', headers=headers)
+
+        return req
+
     def make_request(
             self, url, method, params=None, headers=None, body=None):
         headers = self.rainbow_add_header(headers)
@@ -736,30 +754,6 @@ class WebSocketHandler(Handler):
         req = self.make_request(g_CONFIG['close_url'], 'GET')
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
-
-    def get_valid_req_params(self):
-        log.info('get_valid_req_params func')
-        log.info(self.request.arguments)
-        headers = self.request.headers
-        deviceid1 = 'X_DEVICEID'
-        deviceid2 = 'X_deviceid'
-        deviceid = headers.get(deviceid1) or headers.get(
-            deviceid2) or self.get_query_argument(deviceid1, '')
-        platform1 = 'X_CLIENT_OS'
-        platform2 = 'X_client_os'
-        platform = headers.get(platform1) or headers.get(
-            platform2) or self.get_query_argument(platform1, '')
-        if not deviceid or not platform:
-            log.warning('if not deviceid or not platform')
-            # return None
-
-        identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
-        self.identity = sha256(identity_raw).hexdigest()
-
-        req = self.make_request(
-            g_CONFIG['connect_url'], 'GET', headers=headers)
-
-        return req
 
     def rainbow_add_header(self, headers=None):
         if not headers:

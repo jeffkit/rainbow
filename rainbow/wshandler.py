@@ -439,7 +439,8 @@ class WebSocketHandler(Handler):
                 time.time() + timeout,
                 self.send_packet_cb_timeout,
                 channel,
-                message_id)
+                message_id,
+                packet)
             log.info('send_packet  toh = ')
             log.info(toh)
             log.info('send_packet  message_id = ')
@@ -594,7 +595,7 @@ class WebSocketHandler(Handler):
         send_msg_response(channel, message_id, self, error=exception)
 
     # 服务器主动发消息后的超时
-    def send_packet_cb_timeout(self, channel, message_id):
+    def send_packet_cb_timeout(self, channel, message_id, packet):
         log.info('send_packet_cb_timeout func')
         toh = self.rsp_timeout_hl.get(message_id)
         if toh:
@@ -759,7 +760,9 @@ class WebSocketHandler(Handler):
         if not headers:
             headers = {}
         headers['RAINBOW_CLIENT_IDENTITY'] = self.identity
-        headers['RAINBOW_CLIENT_COOKIE'] = getattr(self, 'rainbow_cookie', '')
+        rainbow_cookie = getattr(self, 'rainbow_cookie', '')
+        if rainbow_cookie:
+            headers['RAINBOW_CLIENT_COOKIE'] = rainbow_cookie
 
         return headers
 

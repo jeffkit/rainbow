@@ -4,16 +4,17 @@ import json
 import time
 import logging as log
 log.basicConfig(level='DEBUG')
-
+from hashlib import sha1
 import tornado.web
 from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler
 from wshandler import sub, unsub
 # from tornado.httpclient import AsyncHTTPClient
 # from tornado.httpclient import HTTPClient
-
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
+
+from config import g_CONFIG
 
 
 def fetch_msg(uid, msg_type, data, qos, timeout, callback=None):
@@ -37,6 +38,29 @@ def fetch_msg(uid, msg_type, data, qos, timeout, callback=None):
     print 'send_message time %f' % time.time()
 
     return future
+
+
+def is_signature(request):
+    nonce = request.get_query_argument('nonce')
+    timestamp = request.get_query_argument('timestamp')
+    signature = request.get_query_argument('signature')
+    if not nonce or not timestamp or not signature:
+        log.warning('not nonce or not timestamp or not signature')
+        return False
+    security_token = g_CONFIG['security_token']
+    sign_ele = [security_token, timestamp, nonce]
+    sign_ele.sort()
+    sign = sha1(''.join(sign_ele)).hexdigest()
+    if sign == signature:
+        return True
+    else:
+        log.warning('sign != signature')
+        return False
+
+
+def error_rsp(request_handler, status, msg):
+    data = json.dumps({'status': status, 'msg': msg})
+    request_handler.write(data)
 
 
 class SendMessageHandler(tornado.web.RequestHandler):
@@ -64,6 +88,11 @@ class SendMessageHandler(tornado.web.RequestHandler):
         {'status': -123, 'msg': 'timeout'}
         """
         log.info('post ' * 5)
+
+        if not is_signature(self):
+            error_rsp(self, 1, 'signature error')
+            return
+
         channel = self.get_query_argument('channel', '')
         log.info('channel = %s' % channel)
         if not channel:
@@ -108,6 +137,10 @@ class SubChannelHandler(tornado.web.RequestHandler):
 
     @tornado.web.asynchronous
     def post(self):
+        if not is_signature(self):
+            error_rsp(self, 1, 'signature error')
+            return
+
         data = json.loads(self.request.body)
         identity = data.get('identity')
         channel = data.get('channel')
@@ -132,6 +165,10 @@ class UnSubChannelHandler(tornado.web.RequestHandler):
 
     @tornado.web.asynchronous
     def post(self):
+        if not is_signature(self):
+            error_rsp(self, 1, 'signature error')
+            return
+
         data = json.loads(self.request.body)
         identity = data.get('identity')
         channel = data.get('channel')

@@ -3,7 +3,9 @@ import time
 import json
 import struct
 import traceback
-from hashlib import sha256
+from hashlib import sha256, sha1
+import random
+import urllib
 
 import tornado
 from tornado.websocket import WebSocketHandler as Handler
@@ -491,13 +493,13 @@ class WebSocketHandler(Handler):
             log.error('handle message error %s' % message, exc_info=True)
 
     def packet_send_business_server(self, packet):
-        http_client = AsyncHTTPClient()
-        headers = self.rainbow_add_header()
         url = g_CONFIG['forward_url'] + str(packet.msgtype) + '/'
         log.info('url = %s' % url)
-        body = packet.data
-        req = HTTPRequest(
-            url=url, method='POST', body=body, headers=headers)
+
+        req = self.make_request(url, 'POST', body=packet.data)
+
+        http_client = AsyncHTTPClient()
+
         return http_client.fetch(req)
 
     # 客户端主动发消息的相应
@@ -711,13 +713,27 @@ class WebSocketHandler(Handler):
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
 
+    def make_request(
+            self, url, method, params=None, headers=None, body=None):
+        headers = self.rainbow_add_header(headers)
+
+        if not params:
+            params = {}
+        param_sign = param_signature()
+        for key, value in param_sign.iteritems():
+            params[key] = value
+        params_str = urllib.urlencode(params)
+
+        url = '%s?%s' % (url, params_str)
+        log.info('make_request make_request make_request')
+        log.info('url = %s' % url)
+        req = HTTPRequest(
+            url=url, method=method, headers=headers, body=body)
+        return req
+
     def on_close_cb(self):
         log.info('on_close_cb func')
-        url = g_CONFIG['close_url']
-
-        headers = self.rainbow_add_header()
-        req = HTTPRequest(
-            url=url, method='GET', headers=headers)
+        req = self.make_request(g_CONFIG['close_url'], 'GET')
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
 
@@ -740,14 +756,8 @@ class WebSocketHandler(Handler):
         identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
         self.identity = sha256(identity_raw).hexdigest()
 
-        url = g_CONFIG['connect_url']
-
-        headers = self.rainbow_add_header(headers)
-
-        log.info(headers)
-
-        req = HTTPRequest(
-            url=url, method='GET', headers=headers)
+        req = self.make_request(
+            g_CONFIG['connect_url'], 'GET', headers=headers)
 
         return req
 
@@ -806,3 +816,13 @@ def unsub(identity, channel):
     if wshandler:
         wshandler.channel_remove(channel)
     return True, None
+
+
+def param_signature():
+    ts = int(time.time())
+    nonce = random.randint(1000, 99999)
+    sign_ele = [g_CONFIG['security_token'], str(ts), str(nonce)]
+    sign_ele.sort()
+    sign = sha1(''.join(sign_ele)).hexdigest()
+    params = {'timestamp': ts, 'nonce': nonce, 'signature': sign}
+    return params

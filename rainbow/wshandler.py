@@ -714,12 +714,16 @@ class WebSocketHandler(Handler):
         headers = self.request.headers
         deviceid1 = 'X_DEVICEID'
         deviceid2 = 'X_deviceid'
+        deviceid3 = 'X-Deviceid'
         deviceid = headers.get(deviceid1) or headers.get(
-            deviceid2) or self.get_query_argument(deviceid1, '')
+            deviceid2) or headers.get(deviceid3) or \
+            self.get_query_argument(deviceid1, '')
         platform1 = 'X_CLIENT_OS'
         platform2 = 'X_client_os'
+        platform3 = 'X-Client-Os'
         platform = headers.get(platform1) or headers.get(
-            platform2) or self.get_query_argument(platform1, '')
+            platform2) or headers.get(platform3) or \
+            self.get_query_argument(platform1, '')
         if not deviceid or not platform:
             log.warning('if not deviceid or not platform')
             return None

@@ -81,7 +81,6 @@ Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至�
 
 	方法 get
 	返回值:
-		channel可选
 
 		{'status': 'success'}
 	
@@ -100,11 +99,13 @@ Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至�
 
 ### 消息回调接口
 
-客户端每上行一条消息，Rainbow都会转发至该接口，消息的类型会通过URL传递过来，消息体参数则会通过Json的方式POST过来。
+客户端每上行一条消息，Rainbow都会转发至该接口，消息的类型会通过URL传递过来，消息体为请求的body
 
 该接口的URL请预留部份给Rainbow传递消息类型。 如 http://localhost:8000/chat/message_type/ message_type为0至65535的数字
 
-此接口需要作为RainBow的forward_url配置
+	此接口需要作为RainBow的forward_url配置
+	
+	方法 post
 
 
 

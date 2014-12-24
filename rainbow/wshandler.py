@@ -736,8 +736,20 @@ class WebSocketHandler(Handler):
         log.info('self.request.headers = ')
         log.info(self.request.headers)
 
+        del headers['Upgrade']
+        del headers['Sec-Websocket-Version']
+        del headers['Sec-Websocket-Key']
+        del headers['Connection']
+        # del headers['Origin']
+        del headers['Host']  # Host 是坏人，会导致nginx502和599
+
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=headers)
+
+        log.info('++++++++++++++++++++')
+        log.info(req.headers)
+        log.info(req.url)
+        log.info('++++++++++++++++++++')
 
         return req
 

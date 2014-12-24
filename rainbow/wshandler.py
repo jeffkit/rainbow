@@ -707,7 +707,10 @@ class WebSocketHandler(Handler):
 
     def get_valid_req_params(self):
         log.info('get_valid_req_params func')
+        log.info('self.request.arguments =')
         log.info(self.request.arguments)
+        log.info('self.request.headers =')
+        log.info(self.request.headers)
         headers = self.request.headers
         deviceid1 = 'X_DEVICEID'
         deviceid2 = 'X_deviceid'

@@ -490,12 +490,7 @@ class WebSocketHandler(Handler):
         except Exception:
             log.error('handle message error %s' % message, exc_info=True)
 
-    # 客户端主动发消息的相应
-    @tornado.gen.coroutine
-    def on_packet_send(self, packet):
-        """收到PACKET_SEND消息
-        """
-        log.info('on_packet_send func')
+    def packet_send_business_server(self, packet):
         http_client = AsyncHTTPClient()
         headers = self.rainbow_add_header()
         url = g_CONFIG['forward_url'] + str(packet.msgtype) + '/'
@@ -503,17 +498,31 @@ class WebSocketHandler(Handler):
         body = packet.data
         req = HTTPRequest(
             url=url, method='POST', body=body, headers=headers)
-        try:
-            rsp = yield http_client.fetch(req)
-            self.rainbow_handle_header(rsp.headers)
-        except Exception, e:
-            log.info(e)
-            log.info(traceback.format_exc())
-            # todo 重试?
-            return
+        return http_client.fetch(req)
 
-        log.info('rsp.code = ')
-        log.info(rsp.code)
+    # 客户端主动发消息的相应
+    @tornado.gen.coroutine
+    def on_packet_send(self, packet):
+        """收到PACKET_SEND消息
+        """
+        log.info('on_packet_send func')
+
+        if packet.qos == 2 and \
+                (packet.dup == 1 or
+                    packet.message_id in self.received_message_ids):
+            # 重复消息，不再发去业务服务器
+            pass
+        else:
+            try:
+                rsp = yield self.packet_send_business_server(packet)
+                self.rainbow_handle_header(rsp.headers)
+            except Exception, e:
+                log.info(e)
+                log.info(traceback.format_exc())
+                return
+            if packet.qos == 2:
+                self.received_message_ids.append(packet.message_id)
+
         data = rsp.body or None
 
         log.info('rsp.body = ')
@@ -521,29 +530,15 @@ class WebSocketHandler(Handler):
         if packet.qos == 0:
             return
         elif packet.qos == 1:
-            rp = Packet(command=Packet.PACKET_ACK,
-                        message_id=packet.message_id, data=data)
+            command = Packet.PACKET_ACK
         elif packet.qos == 2:
-            log.info('elif packet.qos == 2  1')
-            if packet.dup == 1 or \
-                    packet.message_id in self.received_message_ids:
-                # 重复消息，不处理。
-                log.info('elif packet.qos == 2  1.5 return')
-                return
-            log.info('elif packet.qos == 2  3')
-            self.received_message_ids.append(packet.message_id)
-            log.info('elif packet.qos == 2  4')
-            rp = Packet(command=Packet.PACKET_REC,
-                        message_id=packet.message_id,
-                        data=data)
-            log.info('elif packet.qos == 2 5')
-        # todo
+            command = Packet.PACKET_REC
+        rp = Packet(command=command,
+                    message_id=packet.message_id,
+                    data=data)
+        # todo test
         # http回来前, websocket 已经关闭, 是什么效果
         # on_close已经把 futrue 回复了一个close
-        log.info('rp.raw = ')
-        log.info(rp.raw)
-        log.info('len(rp.raw) = ')
-        log.info(len(rp.raw))
         self.write_message(rp.raw, binary=True)
         log.info('after self.write_message(rp.raw)')
 

@@ -10,7 +10,7 @@ from tornado.websocket import WebSocketHandler as Handler
 from tornado.concurrent import TracebackFuture
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
-from tornado.httpclient import HTTPClient
+# from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
 from tornado.websocket import WebSocketClosedError
 import redis
@@ -142,7 +142,7 @@ class Packet(object):
     PACKET_REL = 4  # for QOS2
     PACKET_COM = 5  # for QOS2
 
-    def __init__(self, raw=None, command=None, msg_type=None, data=None,
+    def __init__(self, raw=None, command=None, msgtype=None, data=None,
                  qos=0, dup=0, message_id=None):
         """data有一至两个byte的header
         - 第1个byte是命令及选项，命令占4位，选项占4位。
@@ -185,7 +185,7 @@ class Packet(object):
                            self.PACKET_REC):
                 data_idx = 1
                 if command == self.PACKET_SEND:
-                    msg_type = struct.unpack(
+                    msgtype = struct.unpack(
                         '!H', raw[data_idx:data_idx + 2])[0]
                     data_idx = data_idx + 2
                     if qos > 0:
@@ -204,8 +204,8 @@ class Packet(object):
 
         log.info('command')
         log.info(command)
-        log.info('msg_type')
-        log.info(msg_type)
+        log.info('msgtype')
+        log.info(msgtype)
         log.info('qos')
         log.info(qos)
         log.info('dup')
@@ -216,7 +216,7 @@ class Packet(object):
         log.info(data)
 
         self.command = command  # 命令
-        self.msg_type = msg_type
+        self.msgtype = msgtype
         self.qos = qos  # 发送的质量
         self.dup = dup  # 是否重复发送
         self.message_id = message_id  # 消息ID
@@ -228,7 +228,7 @@ class Packet(object):
             _raw = ''
             _raw += chr(self.command * 16 + self.dup * 8 + self.qos * 2)
             if self.command == self.PACKET_SEND:
-                _raw += struct.pack('!H', self.msg_type)
+                _raw += struct.pack('!H', self.msgtype)
                 if self.qos > 0:
                     _raw += struct.pack('!H', self.message_id)
             else:
@@ -316,9 +316,6 @@ class WebSocketHandler(Handler):
     def on_close(self):
         """从handler_map移除掉handler
         """
-        log.info("on_close ***************************\n")
-        log.info("on_close ***************************\n")
-        log.info("on_close ***************************\n")
         log.info('on_close will close handler for user')
 
         try:
@@ -357,7 +354,7 @@ class WebSocketHandler(Handler):
 
     @classmethod
     def send_message(
-        cls, channel, message_type, data,
+        cls, channel, msgtype, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
@@ -376,7 +373,7 @@ class WebSocketHandler(Handler):
             for identity, handler in handlers.iteritems():
                 handler.send_packet(
                     channel, message_id_channel,
-                    message_type, data, qos, timeout)
+                    msgtype, data, qos, timeout)
         else:
             # 没有客户端在线
             if web_handle_response:
@@ -384,11 +381,11 @@ class WebSocketHandler(Handler):
 
     def send_packet(
             self, channel, message_id_channel,
-            message_type, data, qos=0, timeout=0):
+            msgtype, data, qos=0, timeout=0):
         """此方法需要返回Future
         """
         packet = Packet(command=Packet.PACKET_SEND,
-                        msg_type=message_type,
+                        msgtype=msgtype,
                         data=data, qos=qos)
         packet.message_id = self.gen_next_message_id()
 
@@ -478,8 +475,8 @@ class WebSocketHandler(Handler):
             if not pck.valid:
                 # log.error('if not pck.valid')
                 return
+
             # for test
-            # pas
             # pck.command = 1
             # pck.qos = 2
             # pck.data = "{'haha': 'jjj'}"
@@ -500,35 +497,26 @@ class WebSocketHandler(Handler):
         """
         log.info('on_packet_send func')
         http_client = AsyncHTTPClient()
-        # http_client = HTTPClient()
-        headers = {'content-type': 'application/json'}
-        log.info('headers = %s' % headers)
-        # log.info(g_CONFIG['forward_url'] + str(packet.message_type) + '/')
-        url = 'http://127.0.0.1:4444/api/chat/1/'
-        log.info(url)
-        # url = g_CONFIG['forward_url'] + str(packet.message_type) + '/'
+        headers = self.rainbow_add_header()
+        url = g_CONFIG['forward_url'] + str(packet.msgtype) + '/'
         log.info('url = %s' % url)
-        # body = json.dumps(packet.data)
         body = packet.data
         req = HTTPRequest(
             url=url, method='POST', body=body, headers=headers)
-        log.info('after HTTPRequest')
         try:
-            response = yield http_client.fetch(req)
+            rsp = yield http_client.fetch(req)
+            self.rainbow_handle_header(rsp.headers)
         except Exception, e:
             log.info(e)
             log.info(traceback.format_exc())
             # todo 重试?
             return
 
-        log.info('response.code = ')
-        log.info(response.code)
-        data = response.body or None
+        log.info('rsp.code = ')
+        log.info(rsp.code)
+        data = rsp.body or None
 
-        log.info('qos = ')
-        log.info(packet.qos)
-        log.info('type(packet.qos) = ')
-        log.info(type(packet.qos))
+        log.info('rsp.body = ')
         log.info(data)
         if packet.qos == 0:
             return
@@ -684,16 +672,12 @@ class WebSocketHandler(Handler):
         req = self.get_valid_req_params()
         if req:
             try:
-                response = yield self.valid_request(req)
-                body = json.loads(response.body)
+                rsp = yield self.valid_request(req)
+                body = json.loads(rsp.body)
                 log.info(u'get func body = %s' % body)
                 if body['status'] == 'success':
                     connect_flag = True
-                    # self.uid = body.get('uid')
-                    # channel = body.get('channel')
-                    # self.channels = []
-                    # if channel:
-                    #     self.channel_add(channel)
+                    self.rainbow_handle_header(rsp.headers)
             except Exception, e:
                 log.info(e)
                 log.info(traceback.format_exc())
@@ -724,42 +708,62 @@ class WebSocketHandler(Handler):
         log.info('on_close_cb func')
         url = g_CONFIG['close_url']
 
-        data = {'identity': self.identity}
-        body = json.dumps(data)
-        headers = {'content-type': 'application/json'}
+        headers = self.rainbow_add_header()
         req = HTTPRequest(
-            url=url, body=body, method='POST', headers=headers)
+            url=url, method='GET', headers=headers)
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
 
     def get_valid_req_params(self):
+        log.info('get_valid_req_params func')
+        log.info(self.request.arguments)
         headers = self.request.headers
-        deviceid1 = 'HTTP_X_DEVICEID'
-        deviceid2 = 'Http_x_deviceid'
-        deviceid = headers.get(deviceid1) or headers.get(deviceid2) or ''
-        platform1 = 'HTTP_X_CLIENT_OS'
-        platform2 = 'Http_x_client_os'
-        platform = headers.get(platform1) or headers.get(platform2) or ''
+        deviceid1 = 'X_DEVICEID'
+        deviceid2 = 'X_deviceid'
+        deviceid = headers.get(deviceid1) or headers.get(
+            deviceid2) or self.get_query_argument(deviceid1, '')
+        platform1 = 'X_CLIENT_OS'
+        platform2 = 'X_client_os'
+        platform = headers.get(platform1) or headers.get(
+            platform2) or self.get_query_argument(platform1, '')
         if not deviceid or not platform:
+            log.warning('if not deviceid or not platform')
             # return None
-            pass
 
-        self.identity = sha256(
-            deviceid + platform + str(time.time())).hexdigest()
-        log.info(self.request.headers)
-        # 这里需要把请求头的一些信息转到某个鉴权的地址上去。
+        identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
+        self.identity = sha256(identity_raw).hexdigest()
 
         url = g_CONFIG['connect_url']
 
-        data = {'identity': self.identity}
-        log.info('data = %s' % data)
-        body = json.dumps(data)
-        headers['content-type'] = 'application/json'
+        headers = self.rainbow_add_header(headers)
+
+        log.info(headers)
 
         req = HTTPRequest(
-            url=url, body=body, method='POST', headers=headers)
+            url=url, method='GET', headers=headers)
 
         return req
+
+    def rainbow_add_header(self, headers=None):
+        if not headers:
+            headers = {}
+        headers['RAINBOW_CLIENT_IDENTITY'] = self.identity
+        headers['RAINBOW_CLIENT_COOKIE'] = getattr(self, 'rainbow_cookie', '')
+
+        return headers
+
+    def rainbow_handle_header(self, headers):
+        h_cookie1 = 'Rainbow_client_cookie'
+        h_cookie2 = 'RAINBOW_CLIENT_COOKIE'
+        rainbow_cookie = headers.get(h_cookie1) or headers.get(h_cookie2) or ''
+        self.rainbow_cookie = rainbow_cookie
+
+        h_channel1 = 'RAINBOW_CLIENT_CHANNEL'
+        h_channel2 = 'Rainbow_client_channel'
+        channel = headers.get(h_channel1) or headers.get(h_channel2)
+        if channel:
+            self.channel_add(channel)
+
 
 g_identity_wshandler = {}
 

@@ -6,7 +6,7 @@ import traceback
 from hashlib import sha256, sha1
 import random
 import urllib
-import settings
+# import settings
 import logging as log
 
 import tornado
@@ -17,16 +17,10 @@ from tornado.httpclient import AsyncHTTPClient
 # from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
 from tornado.websocket import WebSocketClosedError
-import redis
+# import redis
 
 from config import g_CONFIG
 
-
-redis_client = redis.Redis(
-    settings.REDIS_HOST,
-    settings.REDIS_PORT,
-    settings.REDIS_DATABASE,
-    settings.REDIS_PASSWORD)
 USER_ID_HASH = 'websocket_connected_users'
 
 # 每个channel 当前 migid, g_channel_msgid[channel] = message_id_channel
@@ -146,8 +140,6 @@ class Packet(object):
     PACKET_REL = 4  # for QOS2
     PACKET_COM = 5  # for QOS2
 
-    RB_Timeout = 5
-
     def __init__(self, raw=None, command=None, msgtype=None, data=None,
                  qos=0, dup=0, message_id=None):
         """data有一至两个byte的header
@@ -255,6 +247,8 @@ class WebSocketHandler(Handler):
     QOS_LEVEL2 = 1
     QOS_LEVEL3 = 2
 
+    RB_Timeout = 5
+
     socket_handlers = {}
     socket_handlers2 = {}
 
@@ -263,12 +257,6 @@ class WebSocketHandler(Handler):
         成功创建websocket连接，保存或更新用户信息。
         """
         log.info('Open connection for %s' % self.identity)
-
-        # todo 这个有什么用的
-        # try:
-        #     redis_client.hsetnx(USER_ID_HASH, self.uid, 1)
-        # except:
-        #     pass
 
         set_identity_hdl(self.identity, self)
         log.info('Open connection for %s finish' % self.identity)

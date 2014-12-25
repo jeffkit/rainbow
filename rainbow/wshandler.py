@@ -503,20 +503,24 @@ class WebSocketHandler(Handler):
         log.info('on_packet_send func')
 
         if packet.qos == 2 and \
-                (packet.dup == 1 or
+                (packet.dup == 1 and
                     packet.message_id in self.received_message_ids):
+            log.debug(u'重复消息，不再发去业务服务器')
             # 重复消息，不再发去业务服务器
-            pass
+            return
         else:
             try:
+                log.debug('before yield self.packet_send_business_server()')
+                if packet.qos == 2:
+                    self.received_message_ids.append(packet.message_id)
                 rsp = yield self.packet_send_business_server(packet)
                 self.rainbow_handle_header(rsp.headers)
             except Exception, e:
-                log.info(e)
-                log.info(traceback.format_exc())
+                if packet.qos == 2:
+                    self.received_message_ids.remove(packet.message_id)
+                log.warning(e)
+                log.warning(traceback.format_exc())
                 return
-            if packet.qos == 2:
-                self.received_message_ids.append(packet.message_id)
 
         data = rsp.body or None
 
@@ -763,7 +767,8 @@ class WebSocketHandler(Handler):
 
         url = '%s?%s' % (url, params_str)
         req = HTTPRequest(
-            url=url, method=method, headers=headers, body=body)
+            url=url, method=method, headers=headers, body=body,
+            connect_timeout=5, request_timeout=5)
         log.debug('req.headers =')
         log.debug(req.headers)
         log.debug('req.url')

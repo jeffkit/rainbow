@@ -516,6 +516,7 @@ class WebSocketHandler(Handler):
         # on_close已经把 futrue 回复了一个close
         self.write_message(rp.raw, binary=True)
         log.info('after self.write_message(rp.raw)')
+        log.debug('rp.raw = %s' % rp.raw)
 
     # 服务器主动发消息的返回
     def on_packet_ack(self, packet):

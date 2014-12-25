@@ -707,7 +707,6 @@ class WebSocketHandler(Handler):
         return http_client.fetch(req)
 
     def get_valid_req_params(self):
-        log.info('get_valid_req_params func')
         log.info('self.request.arguments =')
         log.info(self.request.arguments)
         log.info('self.request.headers =')
@@ -735,25 +734,20 @@ class WebSocketHandler(Handler):
         log.info('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()
 
-        log.info('self.request.headers = ')
-        log.info(self.request.headers)
-
         del headers['Upgrade']
         del headers['Sec-Websocket-Version']
         del headers['Sec-Websocket-Key']
         del headers['Connection']
         del headers['Origin']
         del headers['Host']  # Host 是坏人，会导致nginx502和599
-        # del headers['X_client_os']
-        # del headers['X_deviceid']
 
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=headers)
 
-        log.info('++++++++++++++++++++')
+        log.info('req.headers =')
         log.info(req.headers)
+        log.info('req.url')
         log.info(req.url)
-        log.info('++++++++++++++++++++')
 
         return req
 

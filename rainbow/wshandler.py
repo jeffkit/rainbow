@@ -313,8 +313,7 @@ class WebSocketHandler(Handler):
         log.info('on_close will close handler for user')
 
         try:
-            rsp = yield self.on_close_cb()
-            log.debug(dir(rsp))
+            yield self.on_close_cb()
         except Exception, e:
             log.error(e)
             log.error(traceback.format_exc())
@@ -707,13 +706,13 @@ class WebSocketHandler(Handler):
         log.info('self.request.headers =')
         log.info(self.request.headers)
         headers = self.request.headers
-        deviceid1 = 'X_DEVICEID'
+        deviceid1 = 'X-DEVICEID'
         deviceid2 = 'X_deviceid'
         deviceid3 = 'X-Deviceid'
         deviceid = headers.get(deviceid1) or headers.get(
             deviceid2) or headers.get(deviceid3) or \
             self.get_query_argument(deviceid1, '')
-        platform1 = 'X_CLIENT_OS'
+        platform1 = 'X-CLIENT-OS'
         platform2 = 'X_client_os'
         platform3 = 'X-Client-Os'
         platform = headers.get(platform1) or headers.get(
@@ -759,13 +758,15 @@ class WebSocketHandler(Handler):
         url = '%s?%s' % (url, params_str)
         req = HTTPRequest(
             url=url, method=method, headers=headers, body=body,
-            connect_timeout=5, request_timeout=5)
+            connect_timeout=10, request_timeout=10)
+        log.debug('\n')
         log.debug('req.headers =')
         log.debug(req.headers)
         log.debug('req.url')
         log.debug(req.url)
         log.debug('req.body =')
         log.debug(req.body)
+        log.debug('\n')
         return req
 
     def on_close_cb(self):

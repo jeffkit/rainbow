@@ -781,21 +781,21 @@ class WebSocketHandler(Handler):
     def rainbow_add_header(self, headers=None):
         if not headers:
             headers = {}
-        headers['RAINBOW_CLIENT_IDENTITY'] = self.identity
+        headers['RAINBOWCLIENTIDENTITY'] = self.identity
         rainbow_cookie = getattr(self, 'rainbow_cookie', '')
         if rainbow_cookie:
-            headers['RAINBOW_CLIENT_COOKIE'] = rainbow_cookie
+            headers['RAINBOWCLIENTCOOKIE'] = rainbow_cookie
 
         return headers
 
     def rainbow_handle_header(self, headers):
-        h_cookie1 = 'Rainbow_client_cookie'
-        h_cookie2 = 'RAINBOW_CLIENT_COOKIE'
+        h_cookie1 = 'Rainbowclientcookie'
+        h_cookie2 = 'RAINBOWCLIENTCOOKIE'
         rainbow_cookie = headers.get(h_cookie1) or headers.get(h_cookie2) or ''
         self.rainbow_cookie = rainbow_cookie
 
-        h_channel1 = 'RAINBOW_CLIENT_CHANNEL'
-        h_channel2 = 'Rainbow_client_channel'
+        h_channel1 = 'RAINBOWCLIENTCHANNEL'
+        h_channel2 = 'Rainbowclientchannel'
         channel = headers.get(h_channel1) or headers.get(h_channel2)
         if channel:
             self.channel_add(channel)

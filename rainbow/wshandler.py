@@ -31,6 +31,7 @@ USER_ID_HASH = 'websocket_connected_users'
 
 # 每个channel 当前 migid, g_channel_msgid[channel] = message_id_channel
 g_channel_msgid = {}
+
 # webhandler那边过来的, 每个 channel 的 每一条 message_id_channel 的 future hdl,
 # g_channel_msgid_hdl[channel]={
 # [message_id_channel]=hdl,
@@ -49,7 +50,7 @@ def clear_channel_msg_data(channel):
 def get_next_msgid(channel):
     # 单线程？
     message_id_channel = g_channel_msgid.get(channel, 0)
-    if message_id_channel >= 65535:
+    if message_id_channel >= 65534:
         message_id_channel = 0
     message_id_channel = message_id_channel + 1
     g_channel_msgid[channel] = message_id_channel
@@ -283,7 +284,7 @@ class WebSocketHandler(Handler):
         self.packet_msg_id_to_channel = {}
         self.channels = []
 
-    def gen_next_message_id(self):
+    def gen_wshdl_next_message_id(self):
         if self.next_message_id >= 65534:
             self.next_message_id = 1
         else:
@@ -340,7 +341,7 @@ class WebSocketHandler(Handler):
                 # 如果这个 channel 的没有客户端
                 clear_channel_msg_data(self.channel)
 
-        log.info('handlers after close %d' %
+        log.info('handlers after close len(socket_handlers2 %d' %
                  len(WebSocketHandler.socket_handlers2))
 
         self.close_flag = True
@@ -390,7 +391,7 @@ class WebSocketHandler(Handler):
         else:
             # qos = 1 或 2
             # 生成消息id，将消息发送至客户端，然后记录消息id。等待ack
-            message_id = self.gen_next_message_id()
+            message_id = self.gen_wshdl_next_message_id()
             self.packet_msg_id_to_channel[message_id] = message_id_channel
             packet.message_id = message_id
             future = TracebackFuture()
@@ -650,6 +651,8 @@ class WebSocketHandler(Handler):
             hdl = handlers.get(self.identity)
             if hdl:
                 del handlers[self.identity]
+            if not handlers:
+                del WebSocketHandler.socket_handlers2[channel]
 
     def channel_occupy(self, channel):
         """ 独占这个channel

@@ -3,8 +3,8 @@
 import json
 import time
 import logging as log
-log.basicConfig(level='DEBUG')
 from hashlib import sha1
+
 import tornado.web
 from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler

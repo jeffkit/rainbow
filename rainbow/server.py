@@ -3,7 +3,9 @@ import ConfigParser
 from optparse import OptionParser
 import signal
 import time
+import settings
 import logging as log
+log.basicConfig(level=settings.LOG_LEVEL, format=settings.LOG_FORMAT)
 
 import tornado.web
 import tornado.ioloop
@@ -40,11 +42,13 @@ def init_config():
         return False
 
     log.info(g_CONFIG)
+    log.debug(g_CONFIG)
     return True
 
-
-# MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 3
-MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 1
+if settings.DEBUG:
+    MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 1
+else:
+    MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 3
 
 application = tornado.web.Application([
     # for websocket
@@ -59,7 +63,6 @@ application = tornado.web.Application([
 
 def shutdown():
     log.info('Stopping http server')
-    # server.stop()
 
     # 关闭本进程所有的客户端连接并将用户从在线列表中去掉。
     log.info('make all user offline')
@@ -72,7 +75,6 @@ def shutdown():
              MAX_WAIT_SECONDS_BEFORE_SHUTDOWN)
     io_loop = tornado.ioloop.IOLoop.instance()
     deadline = time.time() + MAX_WAIT_SECONDS_BEFORE_SHUTDOWN
-    # self.subscriber.close()
 
     def stop_loop():
         now = time.time()

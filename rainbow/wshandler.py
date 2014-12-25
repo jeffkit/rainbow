@@ -6,6 +6,8 @@ import traceback
 from hashlib import sha256, sha1
 import random
 import urllib
+import settings
+import logging as log
 
 import tornado
 from tornado.websocket import WebSocketHandler as Handler
@@ -18,9 +20,8 @@ from tornado.websocket import WebSocketClosedError
 import redis
 
 from config import g_CONFIG
-import logging as log
-log.basicConfig(level='DEBUG')
-import settings
+
+
 redis_client = redis.Redis(
     settings.REDIS_HOST,
     settings.REDIS_PORT,
@@ -727,7 +728,7 @@ class WebSocketHandler(Handler):
         if not deviceid or not platform:
             log.warning('if not deviceid or not platform')
             return None
-        ip = headers.get('X-Real-Ip', '')  # nginx的配置设置X-Real-Ip
+        ip = self.request.remote_ip
 
         identity_raw = '%s.%s.%s.%f' % (platform, deviceid, ip, time.time())
 
@@ -741,8 +742,10 @@ class WebSocketHandler(Handler):
         del headers['Sec-Websocket-Version']
         del headers['Sec-Websocket-Key']
         del headers['Connection']
-        # del headers['Origin']
+        del headers['Origin']
         del headers['Host']  # Host 是坏人，会导致nginx502和599
+        # del headers['X_client_os']
+        # del headers['X_deviceid']
 
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=headers)

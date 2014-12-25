@@ -340,6 +340,8 @@ class WebSocketHandler(Handler):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
                  WebSocketHandler.socket_handlers2)
+        log.info('channel = %s' % channel)
+
         if handlers:
 
             # 记录 消息 的回调情况

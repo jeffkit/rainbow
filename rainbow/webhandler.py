@@ -111,8 +111,8 @@ class SendMessageHandler(WebHandler):
         # 如果是集群模式，则直接调用其他服务器的接口。
         # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
 
-        log.info('request.body = %s' % self.request.body)
-        log.info('channel = %s' % channel)
+        log.info('SendMessageHandler request.body = %s' % self.request.body)
+        log.info('SendMessageHandler channel = %s' % channel)
         fetch_msg(channel, msgtype, data, qos, timeout, self.send_finish)
 
         self.toh = IOLoop.current().add_timeout(time.time() + timeout or 10,
@@ -130,11 +130,13 @@ class SendMessageHandler(WebHandler):
         if self.qos > 0:
             data['connections'] = response
         data = json.dumps(data)
+        log.debug('SendMessageHandler send_finish data = %s' % data)
         self.finish(data)
 
     def handle_timeout(self):
         # 虽然超时，但是是否能够知道有部份成功发送？
         self.timeout = True
+        log.debug('SendMessageHandler timeout')
         self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
 
 
@@ -159,6 +161,7 @@ class SubChannelHandler(WebHandler):
             data['status'] = 1
             data['msg'] = errmsg
 
+        log.debug('SubChannelHandler rsp data = %s' % data)
         self.finish(json.dumps(data))
 
 
@@ -180,4 +183,5 @@ class UnSubChannelHandler(WebHandler):
             data['status'] = 1
             data['msg'] = errmsg
 
+        log.debug('SubChannelHandler rsp data = %s' % data)
         self.finish(json.dumps(data))

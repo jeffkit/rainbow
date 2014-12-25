@@ -687,7 +687,13 @@ class WebSocketHandler(Handler):
             self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
             return
         log.info('super(WebSocketHandler, self).get(*args, **kwds)')
-        super(WebSocketHandler, self).get(*args, **kwds)
+
+        try:
+            super(WebSocketHandler, self).get(*args, **kwds)
+        except Exception, e:
+            log.info(u'业务服务器校验返回前,客户端已经关闭了')
+            log.info(e)
+            log.info(traceback.format_exc())
 
     def check_origin(self, origin):
         """ 在 get 会去验证 connect 这里返回 True就可以

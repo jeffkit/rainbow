@@ -145,6 +145,8 @@ class Packet(object):
     PACKET_REL = 4  # for QOS2
     PACKET_COM = 5  # for QOS2
 
+    RB_Timeout = 5
+
     def __init__(self, raw=None, command=None, msgtype=None, data=None,
                  qos=0, dup=0, message_id=None):
         """data有一至两个byte的header
@@ -424,19 +426,21 @@ class WebSocketHandler(Handler):
             log.debug('send_packet handle_response id = %d' %
                       id(handle_response))
 
+            cnt = int(timeout / self.RB_Timeout)  # 重试次数
             toh = IOLoop.current().add_timeout(
-                time.time() + timeout,
+                time.time() + self.RB_Timeout,
                 self.send_packet_cb_timeout,
                 channel,
                 message_id,
-                packet)
+                packet,
+                cnt)
 
             self.rsp_timeout_hl[message_id] = toh
 
             try:
                 self.write_message(packet.raw, binary=True)
             except WebSocketClosedError:
-                log.debug('WebSocketClosedError')
+                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
 
             return future
 
@@ -582,12 +586,26 @@ class WebSocketHandler(Handler):
         send_msg_response(channel, message_id, self, error=exception)
 
     # 服务器主动发消息后的超时
-    def send_packet_cb_timeout(self, channel, message_id, packet):
+    def send_packet_cb_timeout(self, channel, message_id, packet, cnt):
         log.info('send_packet_cb_timeout func')
-        toh = self.rsp_timeout_hl.get(message_id)
-        if toh:
-            del self.rsp_timeout_hl[message_id]
-        send_msg_response(channel, message_id, self, error='timeout')
+        if cnt <= 0:
+            toh = self.rsp_timeout_hl.get(message_id)
+            if toh:
+                del self.rsp_timeout_hl[message_id]
+            send_msg_response(channel, message_id, self, error='timeout')
+        else:
+            toh = IOLoop.current().add_timeout(
+                time.time() + self.RB_Timeout,
+                self.send_packet_cb_timeout,
+                channel,
+                message_id,
+                packet,
+                cnt - 1)
+            self.rsp_timeout_hl[message_id] = toh
+            try:
+                self.write_message(packet.raw, binary=True)
+            except WebSocketClosedError:
+                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
 
     @classmethod
     def shutdown(cls):

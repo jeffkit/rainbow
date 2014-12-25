@@ -42,7 +42,6 @@ def init_config():
         return False
 
     log.info(g_CONFIG)
-    log.debug(g_CONFIG)
     return True
 
 if settings.DEBUG:

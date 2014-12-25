@@ -791,6 +791,7 @@ class WebSocketHandler(Handler):
         return headers
 
     def rainbow_handle_header(self, headers):
+        log.debug('headers = %s' % headers)
         h_cookie1 = 'Rainbowclientcookie'
         h_cookie2 = 'RAINBOWCLIENTCOOKIE'
         rainbow_cookie = headers.get(h_cookie1) or headers.get(h_cookie2) or ''

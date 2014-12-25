@@ -104,6 +104,8 @@ class SendMessageHandler(WebHandler):
         qos = int(self.get_query_argument('qos', 2))
         self.qos = qos
         timeout = int(self.get_query_argument('timeout', '10'))
+        if timeout <= 0:
+            timeout = 10
         data = self.request.body
 
         # 如果是集群模式，则直接调用其他服务器的接口。

@@ -341,18 +341,6 @@ class WebSocketHandler(Handler):
         log.info('handlers after close %d' %
                  len(WebSocketHandler.socket_handlers2))
 
-        # todo 这个用来干嘛的
-        # try:
-        #     if redis_client.hexists(USER_ID_HASH, self.uid):
-        #         redis_client.hdel(USER_ID_HASH, self.uid)
-        #     redis_client.delete(self.get_packet_status_key(self.uid))
-        # except:
-        #     pass
-
-        # if self.uid in self.client_versions:
-        #     del self.client_versions[self.uid]
-        # 干嘛用的？
-
         self.close_flag = True
 
     @classmethod
@@ -390,19 +378,19 @@ class WebSocketHandler(Handler):
         packet = Packet(command=Packet.PACKET_SEND,
                         msgtype=msgtype,
                         data=data, qos=qos)
-        packet.message_id = self.gen_next_message_id()
 
         # 因为一个 wshandler 可能存在多个 channel 中, 所以要各个 wshandler 维护 msg_id
         # 还要 和 这次发送的 message_id_channel 保持好映射
         # 建立映射的同时也要做好取消映射，节约内存
-        self.packet_msg_id_to_channel[packet.message_id] = message_id_channel
 
         if packet.qos == self.QOS_LEVEL1:
             self.write_message(packet.raw, binary=True)
         else:
             # qos = 1 或 2
             # 生成消息id，将消息发送至客户端，然后记录消息id。等待ack
-            message_id = packet.message_id
+            message_id = self.gen_next_message_id()
+            self.packet_msg_id_to_channel[message_id] = message_id_channel
+            packet.message_id = message_id
             future = TracebackFuture()
 
             def handle_future(future):
@@ -423,18 +411,18 @@ class WebSocketHandler(Handler):
             future.add_done_callback(handle_future)
 
             def handle_response(packet=None, exception=None):
-                log.info('send_packet handle_response')
-                log.info('send_packet message_id = %d' % message_id)
-                log.info('send_packet future id = %d' % id(future))
+                log.debug('send_packet handle_response')
+                log.debug('send_packet message_id = %d' % message_id)
+                log.debug('send_packet future id = %d' % id(future))
                 if packet:
                     future.set_result(packet)
                 else:
                     future.set_exception(exception)
             self.future_rsp_hl[message_id] = handle_response
-            log.info('send_packet future id = %d' % id(future))
-            log.info('send_packet self id = %d' % id(self))
-            log.info('send_packet handle_response id = %d' %
-                     id(handle_response))
+            log.debug('send_packet future id = %d' % id(future))
+            log.debug('send_packet self id = %d' % id(self))
+            log.debug('send_packet handle_response id = %d' %
+                      id(handle_response))
 
             toh = IOLoop.current().add_timeout(
                 time.time() + timeout,
@@ -442,19 +430,13 @@ class WebSocketHandler(Handler):
                 channel,
                 message_id,
                 packet)
-            log.info('send_packet  toh = ')
-            log.info(toh)
-            log.info('send_packet  message_id = ')
-            log.info(message_id)
 
             self.rsp_timeout_hl[message_id] = toh
-
-            packet.message_id = message_id
 
             try:
                 self.write_message(packet.raw, binary=True)
             except WebSocketClosedError:
-                log.info('WebSocketClosedError')
+                log.debug('WebSocketClosedError')
 
             return future
 

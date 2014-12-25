@@ -734,15 +734,19 @@ class WebSocketHandler(Handler):
         log.info('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()
 
-        del headers['Upgrade']
-        del headers['Sec-Websocket-Version']
-        del headers['Sec-Websocket-Key']
-        del headers['Connection']
-        del headers['Origin']
-        del headers['Host']  # Host 是坏人，会导致nginx502和599
+        req_headers = {}
+        for k, v in headers.iteritems():
+            req_headers[k] = v
+
+        del req_headers['Upgrade']
+        del req_headers['Sec-Websocket-Version']
+        del req_headers['Sec-Websocket-Key']
+        del req_headers['Connection']
+        del req_headers['Origin']
+        del req_headers['Host']  # Host 是坏人，会导致nginx502和599
 
         req = self.make_request(
-            g_CONFIG['connect_url'], 'GET', headers=headers)
+            g_CONFIG['connect_url'], 'GET', headers=req_headers)
 
         log.info('req.headers =')
         log.info(req.headers)

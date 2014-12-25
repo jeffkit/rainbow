@@ -727,8 +727,9 @@ class WebSocketHandler(Handler):
         if not deviceid or not platform:
             log.warning('if not deviceid or not platform')
             return None
+        ip = headers.get('X-Real-Ip', '')  # nginx的配置设置X-Real-Ip
 
-        identity_raw = '%s.%s.%f' % (platform, deviceid, time.time())
+        identity_raw = '%s.%s.%s.%f' % (platform, deviceid, ip, time.time())
 
         log.info('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()

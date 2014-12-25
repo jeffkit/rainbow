@@ -748,11 +748,6 @@ class WebSocketHandler(Handler):
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=req_headers)
 
-        log.info('req.headers =')
-        log.info(req.headers)
-        log.info('req.url')
-        log.info(req.url)
-
         return req
 
     def make_request(
@@ -767,11 +762,14 @@ class WebSocketHandler(Handler):
         params_str = urllib.urlencode(params)
 
         url = '%s?%s' % (url, params_str)
-        log.info('make_request make_request make_request')
-        log.info('url = %s' % url)
-        log.info('headers = %s' % headers)
         req = HTTPRequest(
             url=url, method=method, headers=headers, body=body)
+        log.debug('req.headers =')
+        log.debug(req.headers)
+        log.debug('req.url')
+        log.debug(req.url)
+        log.debug('req.body =')
+        log.debug(req.body)
         return req
 
     def on_close_cb(self):

@@ -384,6 +384,9 @@ class WebSocketHandler(Handler):
             self.packet_msg_id_to_channel[message_id] = message_id_channel
             packet.message_id = message_id
             future = TracebackFuture()
+            log.debug('channel = %s, message_id_channel = %s, '
+                      'packet.message_id = %s' % (
+                          channel, message_id_channel, message_id))
 
             def handle_future(future):
                 log.info('send_packet handle_future func')

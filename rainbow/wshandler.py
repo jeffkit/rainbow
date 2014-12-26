@@ -35,10 +35,13 @@ g_channel_msgid_hdl = {}
 
 
 def clear_channel_msg_data(channel):
+    log.debug('channel = %s' % channel)
     if g_channel_msgid.get(channel):
         del g_channel_msgid[channel]
     if g_channel_msgid_hdl.get(channel):
         del g_channel_msgid_hdl[channel]
+    log.debug('g_channel_msgid = %s' % g_channel_msgid)
+    log.debug('g_channel_msgid_hdl = %s' % g_channel_msgid_hdl)
 
 
 def get_next_msgid(channel):

@@ -14,6 +14,7 @@ from wshandler import sub, unsub
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
 
+import settings
 from config import g_CONFIG
 
 
@@ -47,9 +48,10 @@ def is_signature(request):
     if not nonce or not timestamp or not signature:
         log.warning('not nonce or not timestamp or not signature')
         return False
-    timenow = time.time()
-    if not (timenow - 10 < int(timestamp) < timenow + 10):
-        return False
+    if not settings.DEBUG:
+        timenow = time.time()
+        if not (timenow - 10 < int(timestamp) < timenow + 10):
+            return False
     security_token = g_CONFIG['security_token']
     sign_ele = [security_token, timestamp, nonce]
     sign_ele.sort()

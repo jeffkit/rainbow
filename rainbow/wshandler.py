@@ -740,6 +740,8 @@ class WebSocketHandler(Handler):
         req_headers = {}
         for k, v in headers.iteritems():
             req_headers[k] = v
+        for k, v in self.request.arguments.iteritems():
+            req_headers[k] = v[0]
 
         del req_headers['Upgrade']
         del req_headers['Sec-Websocket-Version']

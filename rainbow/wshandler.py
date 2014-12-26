@@ -323,11 +323,12 @@ class WebSocketHandler(Handler):
 
         self.channel_on_close()
 
+        log.debug('self.channels = %s' % self.channels)
         for channel in self.channels:
             handlers = WebSocketHandler.socket_handlers2.get(channel, None)
             if not handlers:
                 # 如果这个 channel 的没有客户端
-                clear_channel_msg_data(self.channel)
+                clear_channel_msg_data(channel)
 
         log.info('WebSocketHandler.socket_handlers2 = %s' %
                  WebSocketHandler.socket_handlers2)

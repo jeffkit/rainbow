@@ -36,9 +36,9 @@ g_channel_msgid_hdl = {}
 
 def clear_channel_msg_data(channel):
     log.debug('channel = %s' % channel)
-    if g_channel_msgid.get(channel):
+    if g_channel_msgid.get(channel) is not None:
         del g_channel_msgid[channel]
-    if g_channel_msgid_hdl.get(channel):
+    if g_channel_msgid_hdl.get(channel) is not None:
         del g_channel_msgid_hdl[channel]
     log.debug('g_channel_msgid = %s' % g_channel_msgid)
     log.debug('g_channel_msgid_hdl = %s' % g_channel_msgid_hdl)
@@ -55,7 +55,7 @@ def get_next_msgid(channel):
 
 
 def del_msgid_memory(channel):
-    if g_channel_msgid.get(channel):
+    if g_channel_msgid.get(channel) is not None:
         del g_channel_msgid[channel]
 
 
@@ -77,9 +77,9 @@ def set_msg_hdl(
 
 
 def clear_msg_hdl(channel, message_id_channel):
-    if not g_channel_msgid_hdl.get(channel):
+    if not g_channel_msgid_hdl.get(channel) is not None:
         return
-    if not g_channel_msgid_hdl[channel].get(message_id_channel):
+    if not g_channel_msgid_hdl[channel].get(message_id_channel) is not None:
         return
 
     del g_channel_msgid_hdl[channel][message_id_channel]
@@ -87,7 +87,7 @@ def clear_msg_hdl(channel, message_id_channel):
 
 # 对 webhandler的回应
 def send_msg_response(channel, packet_msg_id, ws_handler, error=''):
-    if ws_handler.future_rsp_hl.get(packet_msg_id):
+    if ws_handler.future_rsp_hl.get(packet_msg_id) is not None:
         del ws_handler.future_rsp_hl[packet_msg_id]
 
     log.info('send_msg_response ')
@@ -531,6 +531,7 @@ class WebSocketHandler(Handler):
 
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
+            del self.future_rsp_hl[packet.message_id]
             # 这里会 set future
             handle_response(packet)
 
@@ -540,10 +541,14 @@ class WebSocketHandler(Handler):
         """
         log.info('on_packet_rec func')
 
-        if packet.message_id not in self.pendding_message_ids:
-            handle_response = self.future_rsp_hl.get(packet.message_id)
-            if handle_response:
-                handle_response(packet)
+        # if packet.message_id not in self.pendding_message_ids:
+        handle_response = self.future_rsp_hl.get(packet.message_id)
+        if handle_response:
+            del self.future_rsp_hl[packet.message_id]
+            handle_response(packet)
+            # todo 如果我 响应 业务服务器，业务方已经超时退出
+            # 但是 rainbow 已经保证了此次发送成功并且只发送一次
+            # 所以直接回复 rel 是 OK 的
 
         packet = Packet(command=Packet.PACKET_REL,
                         message_id=packet.message_id)
@@ -554,10 +559,11 @@ class WebSocketHandler(Handler):
         """收到PACKET_REL消息，删除消息ID，返回COM消息。
         """
         log.info('on_packet_rel func')
-
         if packet.message_id not in self.received_message_ids:
-            return
-        self.received_message_ids.remove(packet.message_id)
+            pass
+        else:
+            self.received_message_ids.remove(packet.message_id)
+
         rp = Packet(command=Packet.PACKET_COM, message_id=packet.message_id)
         self.write_message(rp.raw, binary=True)
 
@@ -566,9 +572,10 @@ class WebSocketHandler(Handler):
         """收到PACKET_COM消息。删除消息ID即可。
         """
         log.info('on_packet_com func')
+        # todo 收不到 com, 要多发几次rel
 
-        if packet.message_id in self.pendding_message_ids:
-            self.pendding_message_ids.remove(packet.message_id)
+        # if packet.message_id in self.pendding_message_ids:
+        #     self.pendding_message_ids.remove(packet.message_id)
 
     # 服务器主动发消息成功后的回调
     def send_packet_cb(self, channel, message_id, packet, exception):

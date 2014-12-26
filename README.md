@@ -70,9 +70,9 @@ RainBow服务器
 #### 接口
 
 	自定义header参数
-	RAINBOW_CLIENT_CHANNEL, rainbow收到这个，表示给当前的websocket handler添加 channel
-	RAINBOW_CLIENT_COOKIE, rainbow存放业务调用方的状态信息, 状态信息需要base64后再发到rainbow
-	RAINBOW_CLIENT_IDENTITY, 为一个客户端连接到rainbow的唯一标识
+	RAINBOWCLIENTCHANNEL, rainbow收到这个，表示给当前的websocket handler添加 channel
+	RAINBOWCLIENTCOOKIE, rainbow存放业务调用方的状态信息, 状态信息需要base64后再发到rainbow
+	RAINBOWCLIENTIDENTITY, 为一个客户端连接到rainbow的唯一标识
 
 业务服务器需要实现以下接口。
 

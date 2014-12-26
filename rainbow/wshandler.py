@@ -6,7 +6,6 @@ import traceback
 from hashlib import sha256, sha1
 import random
 import urllib
-# import settings
 import logging as log
 
 import tornado
@@ -17,9 +16,9 @@ from tornado.httpclient import AsyncHTTPClient
 # from tornado.httpclient import HTTPClient
 from tornado.httpclient import HTTPRequest
 from tornado.websocket import WebSocketClosedError
-# import redis
 
 from config import g_CONFIG
+import settings
 
 USER_ID_HASH = 'websocket_connected_users'
 
@@ -496,16 +495,17 @@ class WebSocketHandler(Handler):
                     self.received_message_ids.append(packet.message_id)
                 rsp = yield self.packet_send_business_server(packet)
                 self.rainbow_handle_header(rsp.headers)
+                data = rsp.body or None
             except Exception, e:
                 if packet.qos == 2:
                     self.received_message_ids.remove(packet.message_id)
                 log.warning(e)
                 log.warning(traceback.format_exc())
-                return
+                if settings.DEBUG:
+                    data = traceback.format_exc()
+                else:
+                    return
 
-        data = rsp.body or None
-
-        log.info('rsp.body = ')
         log.info(data)
         if packet.qos == 0:
             return

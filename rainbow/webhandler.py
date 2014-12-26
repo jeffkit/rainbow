@@ -24,19 +24,16 @@ def fetch_msg(uid, msg_type, data, qos, timeout, callback=None):
         callback = stack_context.wrap(callback)
 
         def handle_future(future):
-            print 'handle_future'
             response = future.result()
             IOLoop.current().add_callback(callback, response)
         future.add_done_callback(handle_future)
 
     def web_handle_response(response=''):
-        print 'handle_response'
         future.set_result(response)
 
     WebSocketHandler.send_message(
         uid, msg_type, data,
         qos, timeout, web_handle_response)
-    print 'send_message time %f' % time.time()
 
     return future
 

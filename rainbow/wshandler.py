@@ -284,17 +284,11 @@ class WebSocketHandler(Handler):
         log.info('handler_close self.rsp_timeout_hl =')
         log.info(self.rsp_timeout_hl)
         for _, toh in self.rsp_timeout_hl.iteritems():
-            log.info('handle_response toh = ')
-            log.info(toh)
             IOLoop.current().remove_timeout(toh)
 
         log.info('handler_close self.future_rsp_hl =')
         log.info(self.future_rsp_hl)
         for message_id, handle_response in self.future_rsp_hl.iteritems():
-            log.info('handler_close message_id = %d' % message_id)
-            log.info('handler_close self id = %d' % id(self))
-            log.info('handler_close id(handle_response)=%d' %
-                     id(handle_response))
             try:
                 handle_response(exception='on_close')
             except Exception, e:
@@ -380,7 +374,6 @@ class WebSocketHandler(Handler):
             self.write_message(packet.raw, binary=True)
         else:
             # qos = 1 或 2
-            # 生成消息id，将消息发送至客户端，然后记录消息id。等待ack
             message_id = self.gen_wshdl_next_message_id()
             self.packet_msg_id_to_channel[message_id] = message_id_channel
             packet.message_id = message_id
@@ -398,27 +391,21 @@ class WebSocketHandler(Handler):
                 except:
                     # 有可能是没发确认就 on_close 了
                     exception = future.exception()
-                    # todo, 记下来, 如果timeout了，是不会有 下面的 handle_response
-                    # 客户端不发 ack 而直接 close 会怎么样, handler_close 函数会有效果吗
-                    # add_callback 的数据，如果 timeout 了，内存是如何清空
+                    # 1.如果timeout了，是不会调用下面的 handle_response
+                    #   然后也不会再调用 handle_future, 不会有 add_callback
+                    # 2.客户端不发 ack 而直接 close
+                    # 会调用 handle_response(exception='on_close')
                 IOLoop.current().add_callback(
                     self.send_packet_cb, channel,
                     message_id, packet, exception)
             future.add_done_callback(handle_future)
 
             def handle_response(packet=None, exception=None):
-                log.debug('send_packet handle_response')
-                log.debug('send_packet message_id = %d' % message_id)
-                log.debug('send_packet future id = %d' % id(future))
                 if packet:
                     future.set_result(packet)
                 else:
                     future.set_exception(exception)
             self.future_rsp_hl[message_id] = handle_response
-            log.debug('send_packet future id = %d' % id(future))
-            log.debug('send_packet self id = %d' % id(self))
-            log.debug('send_packet handle_response id = %d' %
-                      id(handle_response))
 
             cnt = int(timeout / self.RB_Timeout)  # 重试次数
             toh = IOLoop.current().add_timeout(
@@ -486,7 +473,6 @@ class WebSocketHandler(Handler):
                 (packet.dup == 1 and
                     packet.message_id in self.received_message_ids):
             log.debug(u'重复消息，不再发去业务服务器')
-            # 重复消息，不再发去业务服务器
             return
         else:
             try:
@@ -541,12 +527,11 @@ class WebSocketHandler(Handler):
         """
         log.info('on_packet_rec func')
 
-        # if packet.message_id not in self.pendding_message_ids:
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
             del self.future_rsp_hl[packet.message_id]
             handle_response(packet)
-            # todo 如果我 响应 业务服务器，业务方已经超时退出
+            # 如果我 响应 业务服务器，业务方已经超时退出
             # 但是 rainbow 已经保证了此次发送成功并且只发送一次
             # 所以直接回复 rel 是 OK 的
 
@@ -619,7 +604,7 @@ class WebSocketHandler(Handler):
             for identity, handler in handlers.iteritems():
                 log.debug('identity = %s close' % identity)
                 handler.close()
-        # shutdown 会引起 on_close
+        # shutdown 不会引起 on_close
 
     def channel_add(self, channel):
         log.info('channel_add func')

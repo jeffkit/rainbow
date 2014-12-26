@@ -798,14 +798,17 @@ class WebSocketHandler(Handler):
         log.debug('headers = %s' % headers)
         h_cookie1 = 'Rainbowclientcookie'
         h_cookie2 = 'RAINBOWCLIENTCOOKIE'
-        rainbow_cookie = headers.get(h_cookie1) or headers.get(h_cookie2) or ''
-        self.rainbow_cookie = rainbow_cookie
+        rainbow_cookie = headers.get(h_cookie1) or headers.get(h_cookie2)
+        if rainbow_cookie:
+            self.rainbow_cookie = rainbow_cookie
+            log.debug('self.rainbow_cookie = %s' % self.rainbow_cookie)
 
         h_channel1 = 'RAINBOWCLIENTCHANNEL'
         h_channel2 = 'Rainbowclientchannel'
         channel = headers.get(h_channel1) or headers.get(h_channel2)
         if channel:
             self.channel_add(channel)
+            log.debug('RAINBOWCLIENTCHANNEL = %s' % channel)
 
 
 # identity 与 websocket handler 的映射

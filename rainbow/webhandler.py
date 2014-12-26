@@ -47,6 +47,9 @@ def is_signature(request):
     if not nonce or not timestamp or not signature:
         log.warning('not nonce or not timestamp or not signature')
         return False
+    timenow = time.time()
+    if not (timenow - 10 < int(timestamp) < timenow + 10):
+        return False
     security_token = g_CONFIG['security_token']
     sign_ele = [security_token, timestamp, nonce]
     sign_ele.sort()
@@ -64,6 +67,7 @@ def error_rsp(request_handler, status, msg):
 
 
 class WebHandler(tornado.web.RequestHandler):
+
     @tornado.web.asynchronous
     def prepare(self):
         if not is_signature(self):

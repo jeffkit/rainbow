@@ -710,10 +710,10 @@ class WebSocketHandler(Handler):
         return http_client.fetch(req)
 
     def get_valid_req_params(self):
-        log.info('self.request.arguments =')
-        log.info(self.request.arguments)
-        log.info('self.request.headers =')
-        log.info(self.request.headers)
+        log.debug('self.request.arguments =')
+        log.debug(self.request.arguments)
+        log.debug('self.request.headers =')
+        log.debug(self.request.headers)
         headers = self.request.headers
         deviceid1 = 'X-DEVICEID'
         deviceid2 = 'X_deviceid'
@@ -734,7 +734,7 @@ class WebSocketHandler(Handler):
 
         identity_raw = '%s.%s.%s.%f' % (platform, deviceid, ip, time.time())
 
-        log.info('identity_raw = %s' % identity_raw)
+        log.debug('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()
 
         req_headers = {}

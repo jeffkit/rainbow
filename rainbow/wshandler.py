@@ -256,8 +256,6 @@ class WebSocketHandler(Handler):
         """
         成功创建websocket连接，保存或更新用户信息。
         """
-        log.info('Open connection for %s' % self.identity)
-
         set_identity_hdl(self.identity, self)
         log.info('Open connection for %s finish' % self.identity)
 
@@ -328,8 +326,8 @@ class WebSocketHandler(Handler):
                 # 如果这个 channel 的没有客户端
                 clear_channel_msg_data(self.channel)
 
-        log.info('handlers after close len(socket_handlers2 %d' %
-                 len(WebSocketHandler.socket_handlers2))
+        log.info('WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
 
         self.close_flag = True
 
@@ -606,16 +604,11 @@ class WebSocketHandler(Handler):
         """把当前线程所有的用户状态标记为离线。
         再关闭用户连接。
         """
-        # todo 改，已经用了 map
-        for channel, handler in cls.socket_handlers.iteritems():
-            if isinstance(handler, list):
-                for h in handler:
-                    log.info('close here 1')
-                    h.close()
-            else:
+        for channel, handlers in WebSocketHandler.socket_handlers2.iteritems():
+            for identity, handler in handlers.iteritems():
+                log.debug('identity = %s close' % identity)
                 handler.close()
-                log.info('close here 2')
-        # todo shutdown 会调用 on_close 吗
+        # shutdown 会引起 on_close
 
     def channel_add(self, channel):
         log.info('channel_add func')

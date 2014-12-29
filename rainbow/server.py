@@ -6,6 +6,7 @@ import time
 import settings
 import logging as log
 log.basicConfig(level=settings.LOG_LEVEL, format=settings.LOG_FORMAT)
+import traceback
 
 import tornado.web
 import tornado.ioloop
@@ -38,7 +39,9 @@ def init_config():
         g_CONFIG['security_token'] = config.get("main", "security_token")
         g_CONFIG['forward_url'] = config.get("main", "forward_url")
         g_CONFIG['close_url'] = config.get("main", "close_url")
-    except:
+    except Exception, e:
+        log.error(e)
+        log.error(traceback.format_exc())
         return False
 
     log.info(g_CONFIG)

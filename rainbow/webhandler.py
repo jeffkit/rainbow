@@ -10,8 +10,6 @@ import tornado.web
 from tornado.ioloop import IOLoop
 from wshandler import WebSocketHandler
 from wshandler import sub, unsub
-# from tornado.httpclient import AsyncHTTPClient
-# from tornado.httpclient import HTTPClient
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
 

@@ -23,22 +23,6 @@ import settings
 USER_ID_HASH = 'websocket_connected_users'
 
 
-def exception_catch(func):
-    def _exception_catch(*args, **kwargs):
-        try:
-            log.debug(args)
-            log.debug(kwargs)
-            result = func(*args, **kwargs)
-            # type(result) = <type 'generator'>
-            log.debug('type(result) = %s' % type(result))
-            return result
-        except Exception, e:
-            log.warning(e)
-            log.warning(traceback.format_exc())
-
-    return _exception_catch
-
-
 # 每个channel 当前 migid, g_channel_msgid[channel] = message_id_channel
 g_channel_msgid = {}
 
@@ -268,12 +252,7 @@ class Packet(object):
 
 
 class WebSocketHandler(Handler):
-    QOS_LEVEL1 = 0
-    QOS_LEVEL2 = 1
-    QOS_LEVEL3 = 2
-
     RB_Timeout = 5
-
     socket_handlers = {}
     socket_handlers2 = {}
 
@@ -397,7 +376,7 @@ class WebSocketHandler(Handler):
         # 还要 和 这次发送的 message_id_channel 保持好映射
         # 建立映射的同时也要做好取消映射，节约内存
 
-        if packet.qos == self.QOS_LEVEL1:
+        if packet.qos == 0:
             try:
                 self.write_message(packet.raw, binary=True)
             except WebSocketClosedError:
@@ -440,10 +419,7 @@ class WebSocketHandler(Handler):
             toh = IOLoop.current().add_timeout(
                 time.time() + self.RB_Timeout,
                 self.send_packet_cb_timeout,
-                channel,
-                message_id,
-                packet,
-                cnt)
+                channel, message_id, packet, cnt)
 
             self.rsp_timeout_hl[message_id] = toh
             try:
@@ -619,10 +595,7 @@ class WebSocketHandler(Handler):
             toh = IOLoop.current().add_timeout(
                 time.time() + self.RB_Timeout,
                 self.send_packet_cb_timeout,
-                channel,
-                message_id,
-                packet,
-                cnt - 1)
+                channel, message_id, packet, cnt - 1)
             self.rsp_timeout_hl[message_id] = toh
             try:
                 self.write_message(packet.raw, binary=True)
@@ -747,10 +720,9 @@ class WebSocketHandler(Handler):
         return http_client.fetch(req)
 
     def get_valid_req_params(self):
-        log.debug('self.request.arguments =')
-        log.debug(self.request.arguments)
-        log.debug('self.request.headers =')
-        log.debug(self.request.headers)
+        log.debug('self.request.arguments = %s' % self.request.arguments)
+        log.debug('self.request.headers = %s' % self.request.headers)
+
         headers = self.request.headers
         deviceid1 = 'X-DEVICEID'
         deviceid2 = 'X_deviceid'
@@ -770,7 +742,6 @@ class WebSocketHandler(Handler):
         ip = self.request.remote_ip
 
         identity_raw = '%s.%s.%s.%f' % (platform, deviceid, ip, time.time())
-
         log.debug('identity_raw = %s' % identity_raw)
         self.identity = sha256(identity_raw).hexdigest()
 
@@ -808,12 +779,9 @@ class WebSocketHandler(Handler):
             url=url, method=method, headers=headers, body=body,
             connect_timeout=10, request_timeout=10)
         log.debug('\n')
-        log.debug('req.headers =')
-        log.debug(req.headers)
-        log.debug('req.url')
-        log.debug(req.url)
-        log.debug('req.body =')
-        log.debug(req.body)
+        log.debug('req.headers = %s' % req.headers)
+        log.debug('req.url = %s' % req.url)
+        log.debug('req.body = %s' % req.body)
         log.debug('\n')
         return req
 

@@ -4,6 +4,7 @@ import json
 import time
 import logging as log
 from hashlib import sha1
+import traceback
 
 import tornado.web
 from tornado.ioloop import IOLoop
@@ -98,34 +99,39 @@ class SendMessageHandler(WebHandler):
         失败:
         {'status': -123, 'msg': 'timeout'}
         """
-        log.info('post ' * 5)
-        channel = self.get_query_argument('channel', '')
-        log.info('channel = %s' % channel)
-        if not channel:
-            channel = 'uuiidd'
-        msgtype = int(self.get_query_argument('msgtype', '1'))
-        qos = int(self.get_query_argument('qos', 2))
-        self.qos = qos
-        timeout = int(self.get_query_argument('timeout', '10'))
-        if timeout <= 0:
-            timeout = 10
-        data = self.request.body
+        try:
+            channel = self.get_query_argument('channel', '')
+            log.debug('channel = %s' % channel)
+            if not channel:
+                return error_rsp(self, 1, 'channel miss')
+            msgtype = int(self.get_query_argument('msgtype', '1'))
+            qos = int(self.get_query_argument('qos', 2))
+            self.qos = qos
+            timeout = int(self.get_query_argument('timeout', '10'))
+            if timeout <= 0:
+                timeout = 10
+            data = self.request.body
 
-        # 如果是集群模式，则直接调用其他服务器的接口。
-        # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
+            # 如果是集群模式，则直接调用其他服务器的接口。
+            # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
 
-        log.info('SendMessageHandler request.body = %s' % self.request.body)
-        log.info('SendMessageHandler channel = %s' % channel)
-        fetch_msg(channel, msgtype, data, qos, timeout, self.send_finish)
+            log.debug('SendMessageHandler body = %s' % self.request.body)
+            log.debug('SendMessageHandler channel = %s' % channel)
+            fetch_msg(channel, msgtype, data, qos, timeout, self.send_finish)
 
-        self.toh = IOLoop.current().add_timeout(time.time() + timeout or 10,
-                                                self.handle_timeout)
+            self.toh = IOLoop.current().add_timeout(
+                time.time() + timeout or 10,
+                self.handle_timeout)
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())
 
     def send_finish(self, response):
         """发送完成了，返回数据给客户端
             response = {'connections': 2, 'data': xxxx}
         """
         if getattr(self, 'timeout', None):
+            log.info('already timeout return')
             return
 
         IOLoop.current().remove_timeout(self.toh)
@@ -133,61 +139,77 @@ class SendMessageHandler(WebHandler):
         data = {'status': 0}
         if self.qos > 0:
             data['connections'] = response['connections']
-        data['data'] = response['data']
+            data['data'] = response['data']
         data = json.dumps(data)
 
         log.debug('SendMessageHandler send_finish data = %s' % data)
-        self.finish(data)
+        try:
+            self.finish(data)
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())
 
     def handle_timeout(self):
         # 虽然超时，但是是否能够知道有部份成功发送？
         self.timeout = True
-        log.debug('SendMessageHandler timeout')
-        self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
+        log.info('SendMessageHandler timeout')
+        try:
+            self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())
 
 
 class SubChannelHandler(WebHandler):
 
     @tornado.web.asynchronous
     def post(self):
-        data = json.loads(self.request.body)
-        identity = data.get('identity')
-        channel = data.get('channel')
-        occupy = data.get('occupy', False)
-        if occupy:
-            occupy = True
-        if not identity or not channel:
-            return error_rsp(self, 1, 'params error')
+        try:
+            data = json.loads(self.request.body)
+            identity = data.get('identity')
+            channel = data.get('channel')
+            occupy = data.get('occupy', False)
+            if occupy:
+                occupy = True
+            if not identity or not channel:
+                return error_rsp(self, 1, 'params error')
 
-        ret, errmsg = sub(identity, channel, occupy)
-        data = {}
-        if ret:
-            data['status'] = 0
-        else:
-            data['status'] = 1
-            data['msg'] = errmsg
+            ret, errmsg = sub(identity, channel, occupy)
+            data = {}
+            if ret:
+                data['status'] = 0
+            else:
+                data['status'] = 1
+                data['msg'] = errmsg
 
-        log.debug('SubChannelHandler rsp data = %s' % data)
-        self.finish(json.dumps(data))
+            log.debug('SubChannelHandler rsp data = %s' % data)
+            self.finish(json.dumps(data))
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())
 
 
 class UnSubChannelHandler(WebHandler):
 
     @tornado.web.asynchronous
     def post(self):
-        data = json.loads(self.request.body)
-        identity = data.get('identity')
-        channel = data.get('channel')
-        if not identity or not channel:
-            return error_rsp(self, 1, 'params error')
+        try:
+            data = json.loads(self.request.body)
+            identity = data.get('identity')
+            channel = data.get('channel')
+            if not identity or not channel:
+                return error_rsp(self, 1, 'params error')
 
-        ret, errmsg = unsub(identity, channel)
-        data = {}
-        if ret:
-            data['status'] = 0
-        else:
-            data['status'] = 1
-            data['msg'] = errmsg
+            ret, errmsg = unsub(identity, channel)
+            data = {}
+            if ret:
+                data['status'] = 0
+            else:
+                data['status'] = 1
+                data['msg'] = errmsg
 
-        log.debug('SubChannelHandler rsp data = %s' % data)
-        self.finish(json.dumps(data))
+            log.debug('SubChannelHandler rsp data = %s' % data)
+            self.finish(json.dumps(data))
+        except Exception, e:
+            log.error(e)
+            log.error(traceback.format_exc())

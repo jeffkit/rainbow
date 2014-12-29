@@ -165,6 +165,7 @@ class SubChannelHandler(WebHandler):
     @tornado.web.asynchronous
     def post(self):
         try:
+            log.debug(self.request.body)
             data = json.loads(self.request.body)
             identity = data.get('identity')
             channel = data.get('channel')

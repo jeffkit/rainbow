@@ -660,8 +660,14 @@ class WebSocketHandler(Handler):
 
     def channel_remove(self, channel):
         log.debug('channel_remove func')
+        log.debug('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
         self._channel_remove(channel)
+        log.debug('before self.channels = %s' % self.channels)
         self.channels.remove(channel)
+        log.debug('after self.channels = %s' % self.channels)
+        log.debug('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
 
     def _channel_remove(self, channel):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)

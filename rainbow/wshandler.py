@@ -31,8 +31,6 @@ def exception_catch(func):
             result = func(*args, **kwargs)
             # type(result) = <type 'generator'>
             log.debug('type(result) = %s' % type(result))
-            log.debug('dir(result) = %s' % dir(result))
-            log.debug('func +++++++++ +++++++++++++')
             return result
         except Exception, e:
             log.warning(e)
@@ -108,13 +106,12 @@ def clear_msg_hdl(channel, message_id_channel):
 def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     if ws_handler.future_rsp_hl.get(packet_msg_id) is not None:
         del ws_handler.future_rsp_hl[packet_msg_id]
-    log.debug('send_msg_response111 data = %s' % data)
+    log.debug('send_msg_response data = %s' % data)
 
-    log.info('send_msg_response ')
-    log.info('send_msg_response message_id')
-    log.info(packet_msg_id)
-    log.info('send_msg_response error')
-    log.info(error)
+    log.debug('send_msg_response message_id')
+    log.debug(packet_msg_id)
+    log.debug('send_msg_response error')
+    log.debug(error)
 
     message_id_channel = ws_handler.packet_msg_id_to_channel.get(packet_msg_id)
     if not message_id_channel:
@@ -131,8 +128,8 @@ def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     hdl_info = g_channel_msgid_hdl[channel][message_id_channel]
     if data:
         hdl_info['rsp_data'] = data
-    log.info('send_msg_response hdl_info =')
-    log.info(hdl_info)
+    log.debug('send_msg_response hdl_info =')
+    log.debug(hdl_info)
     # 用字典防止多次确认
     if not error:
         hdl_info['finish_list'][ws_handler] = 1
@@ -145,10 +142,10 @@ def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     finish_count = len(hdl_info['finish_list'])
     rsp_count = finish_count + len(hdl_info['error_list'])
 
-    log.info('send_msg_response error_list %d' % len(hdl_info['error_list']))
-    log.info('send_msg_response finish_count %d' % finish_count)
-    log.info('send_msg_response rsp_count %d' % rsp_count)
-    log.info('send_msg_response client_count = %d' % hdl_info['client_count'])
+    log.debug('send_msg_response error_list %d' % len(hdl_info['error_list']))
+    log.debug('send_msg_response finish_count %d' % finish_count)
+    log.debug('send_msg_response rsp_count %d' % rsp_count)
+    log.debug('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
         if hdl_info.get('web_handle_response'):
@@ -307,13 +304,13 @@ class WebSocketHandler(Handler):
         return self.next_message_id
 
     def handler_close(self):
-        log.info('handler_close self.rsp_timeout_hl =')
-        log.info(self.rsp_timeout_hl)
+        log.debug('handler_close self.rsp_timeout_hl =')
+        log.debug(self.rsp_timeout_hl)
         for _, toh in self.rsp_timeout_hl.iteritems():
             IOLoop.current().remove_timeout(toh)
 
-        log.info('handler_close self.future_rsp_hl =')
-        log.info(self.future_rsp_hl)
+        log.debug('handler_close self.future_rsp_hl =')
+        log.debug(self.future_rsp_hl)
         for message_id, handle_response in self.future_rsp_hl.iteritems():
             try:
                 handle_response(exception='on_close')
@@ -363,9 +360,9 @@ class WebSocketHandler(Handler):
         cls, channel, msgtype, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
-        log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
-                 WebSocketHandler.socket_handlers2)
-        log.info('channel = %s' % channel)
+        log.debug('send_message WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
+        log.debug('channel = %s' % channel)
 
         if handlers:
 
@@ -646,11 +643,11 @@ class WebSocketHandler(Handler):
         # shutdown 不会引起 on_close
 
     def channel_add(self, channel):
-        log.info('channel_add func')
+        log.debug('channel_add func')
         self.channels.append(channel)
 
-        log.info('channel_add WebSocketHandler.socket_handlers2 = %s' %
-                 WebSocketHandler.socket_handlers2)
+        log.debug('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
 
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
         if handlers:
@@ -658,11 +655,11 @@ class WebSocketHandler(Handler):
         else:
             WebSocketHandler.socket_handlers2[channel] = {}
             WebSocketHandler.socket_handlers2[channel][self.identity] = self
-        log.info('channel_add WebSocketHandler.socket_handlers2 = %s' %
-                 WebSocketHandler.socket_handlers2)
+        log.debug('channel_add WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
 
     def channel_remove(self, channel):
-        log.info('channel_remove func')
+        log.debug('channel_remove func')
         self._channel_remove(channel)
         self.channels.remove(channel)
 
@@ -710,8 +707,8 @@ class WebSocketHandler(Handler):
                         connect_flag = True
                         self.rainbow_handle_header(rsp.headers)
                 except Exception, e:
-                    log.info(e)
-                    log.info(traceback.format_exc())
+                    log.warning(e)
+                    log.warning(traceback.format_exc())
             if not connect_flag:
                 log.warning('invalid request, close!')
                 self.set_status(401)

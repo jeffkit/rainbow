@@ -194,8 +194,8 @@ class Packet(object):
                 self._valid = False
                 # log.error(u' 心跳吗 return')
                 return
-            log.info('Packet __init__ command = ')
-            log.info(command)
+            log.debug('Packet __init__ command = ')
+            log.debug(command)
             if command == self.PACKET_RESERVED:
                 self._valid = False
                 log.error('return 2')

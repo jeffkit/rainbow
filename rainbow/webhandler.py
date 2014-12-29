@@ -74,6 +74,12 @@ class WebHandler(tornado.web.RequestHandler):
             return error_rsp(self, 1, 'signature error')
         return super(WebHandler, self).prepare()
 
+    def exception_finish(self, e, tb):
+        log.error(e)
+        log.error(tb)
+        self.set_status(500)
+        self.finish()
+
 
 class SendMessageHandler(WebHandler):
 
@@ -123,8 +129,7 @@ class SendMessageHandler(WebHandler):
                 time.time() + timeout or 10,
                 self.handle_timeout)
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
+            self.exception_finish(e, traceback.format_exc())
 
     def send_finish(self, response):
         """发送完成了，返回数据给客户端
@@ -146,8 +151,7 @@ class SendMessageHandler(WebHandler):
         try:
             self.finish(data)
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
+            self.exception_finish(e, traceback.format_exc())
 
     def handle_timeout(self):
         # 虽然超时，但是是否能够知道有部份成功发送？
@@ -156,8 +160,7 @@ class SendMessageHandler(WebHandler):
         try:
             self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
+            self.exception_finish(e, traceback.format_exc())
 
 
 class SubChannelHandler(WebHandler):
@@ -186,8 +189,7 @@ class SubChannelHandler(WebHandler):
             log.debug('SubChannelHandler rsp data = %s' % data)
             self.finish(json.dumps(data))
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
+            self.exception_finish(e, traceback.format_exc())
 
 
 class UnSubChannelHandler(WebHandler):
@@ -212,5 +214,4 @@ class UnSubChannelHandler(WebHandler):
             log.debug('SubChannelHandler rsp data = %s' % data)
             self.finish(json.dumps(data))
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
+            self.exception_finish(e, traceback.format_exc())

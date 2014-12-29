@@ -123,6 +123,7 @@ class SendMessageHandler(WebHandler):
 
     def send_finish(self, response):
         """发送完成了，返回数据给客户端
+            response = {'connections': 2, 'data': xxxx}
         """
         if getattr(self, 'timeout', None):
             return
@@ -131,8 +132,10 @@ class SendMessageHandler(WebHandler):
 
         data = {'status': 0}
         if self.qos > 0:
-            data['connections'] = response
+            data['connections'] = response['connections']
+        data['data'] = response['data']
         data = json.dumps(data)
+
         log.debug('SendMessageHandler send_finish data = %s' % data)
         self.finish(data)
 

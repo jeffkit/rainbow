@@ -22,6 +22,25 @@ import settings
 
 USER_ID_HASH = 'websocket_connected_users'
 
+
+def exception_catch(func):
+    def _exception_catch(*args, **kwargs):
+        try:
+            log.debug(args)
+            log.debug(kwargs)
+            result = func(*args, **kwargs)
+            # type(result) = <type 'generator'>
+            log.debug('type(result) = %s' % type(result))
+            log.debug('dir(result) = %s' % dir(result))
+            log.debug('func +++++++++ +++++++++++++')
+            return result
+        except Exception, e:
+            log.warning(e)
+            log.warning(traceback.format_exc())
+
+    return _exception_catch
+
+
 # 每个channel 当前 migid, g_channel_msgid[channel] = message_id_channel
 g_channel_msgid = {}
 
@@ -73,6 +92,7 @@ def set_msg_hdl(
     message_id_list[message_id_channel]['finish_list'] = {}
     message_id_list[message_id_channel]['error_list'] = {}
     message_id_list[message_id_channel]['client_count'] = client_count
+    message_id_list[message_id_channel]['rsp_data'] = ''
 
 
 def clear_msg_hdl(channel, message_id_channel):
@@ -85,9 +105,10 @@ def clear_msg_hdl(channel, message_id_channel):
 
 
 # 对 webhandler的回应
-def send_msg_response(channel, packet_msg_id, ws_handler, error=''):
+def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     if ws_handler.future_rsp_hl.get(packet_msg_id) is not None:
         del ws_handler.future_rsp_hl[packet_msg_id]
+    log.debug('send_msg_response111 data = %s' % data)
 
     log.info('send_msg_response ')
     log.info('send_msg_response message_id')
@@ -108,6 +129,8 @@ def send_msg_response(channel, packet_msg_id, ws_handler, error=''):
         return
 
     hdl_info = g_channel_msgid_hdl[channel][message_id_channel]
+    if data:
+        hdl_info['rsp_data'] = data
     log.info('send_msg_response hdl_info =')
     log.info(hdl_info)
     # 用字典防止多次确认
@@ -128,8 +151,11 @@ def send_msg_response(channel, packet_msg_id, ws_handler, error=''):
     log.info('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
-        if hdl_info['web_handle_response']:
-            hdl_info['web_handle_response'](finish_count)
+        if hdl_info.get('web_handle_response'):
+            response = {
+                'connections': finish_count,
+                'data': hdl_info['rsp_data']}
+            hdl_info['web_handle_response'](response)
         clear_msg_hdl(channel, message_id_channel)
 
 
@@ -202,18 +228,18 @@ class Packet(object):
             else:
                 message_id = struct.unpack('!H', raw[1:3])[0]
 
-        log.info('command')
-        log.info(command)
-        log.info('msgtype')
-        log.info(msgtype)
-        log.info('qos')
-        log.info(qos)
-        log.info('dup')
-        log.info(dup)
-        log.info('message_id')
-        log.info(message_id)
-        log.info('data')
-        log.info(data)
+        log.debug('command')
+        log.debug(command)
+        log.debug('msgtype')
+        log.debug(msgtype)
+        log.debug('qos')
+        log.debug(qos)
+        log.debug('dup')
+        log.debug(dup)
+        log.debug('message_id')
+        log.debug(message_id)
+        log.debug('data')
+        log.debug(data)
 
         self.command = command  # 命令
         self.msgtype = msgtype
@@ -304,29 +330,33 @@ class WebSocketHandler(Handler):
     def on_close(self):
         """从handler_map移除掉handler
         """
-        log.info('on_close will close handler for user')
-
         try:
-            yield self.on_close_cb()
+            log.debug('on_close will close handler for identity = %s' %
+                      self.identity)
+
+            try:
+                yield self.on_close_cb()
+            except Exception, e:
+                log.error(e)
+                log.error(traceback.format_exc())
+
+            self.handler_close()
+
+            self.channel_on_close()
+
+            log.debug('self.channels = %s' % self.channels)
+            for channel in self.channels:
+                handlers = WebSocketHandler.socket_handlers2.get(channel, None)
+                if not handlers:
+                    # 如果这个 channel 的没有客户端
+                    clear_channel_msg_data(channel)
+
+            log.debug('WebSocketHandler.socket_handlers2 = %s' %
+                      WebSocketHandler.socket_handlers2)
+
         except Exception, e:
-            log.error(e)
-            log.error(traceback.format_exc())
-
-        self.handler_close()
-
-        self.channel_on_close()
-
-        log.debug('self.channels = %s' % self.channels)
-        for channel in self.channels:
-            handlers = WebSocketHandler.socket_handlers2.get(channel, None)
-            if not handlers:
-                # 如果这个 channel 的没有客户端
-                clear_channel_msg_data(channel)
-
-        log.info('WebSocketHandler.socket_handlers2 = %s' %
-                 WebSocketHandler.socket_handlers2)
-
-        self.close_flag = True
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     @classmethod
     def send_message(
@@ -355,7 +385,7 @@ class WebSocketHandler(Handler):
         else:
             # 没有客户端在线
             if web_handle_response:
-                web_handle_response(0)
+                web_handle_response({'connections': 0, 'data': ''})
 
     def send_packet(
             self, channel, message_id_channel,
@@ -371,9 +401,11 @@ class WebSocketHandler(Handler):
         # 建立映射的同时也要做好取消映射，节约内存
 
         if packet.qos == self.QOS_LEVEL1:
-            self.write_message(packet.raw, binary=True)
+            try:
+                self.write_message(packet.raw, binary=True)
+            except WebSocketClosedError:
+                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
         else:
-            # qos = 1 或 2
             message_id = self.gen_wshdl_next_message_id()
             self.packet_msg_id_to_channel[message_id] = message_id_channel
             packet.message_id = message_id
@@ -417,11 +449,11 @@ class WebSocketHandler(Handler):
                 cnt)
 
             self.rsp_timeout_hl[message_id] = toh
-
             try:
                 self.write_message(packet.raw, binary=True)
-            except WebSocketClosedError:
-                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
+            except Exception, e:
+                log.warning(e)
+                log.warning(traceback.format_exc())
 
             return future
 
@@ -433,15 +465,14 @@ class WebSocketHandler(Handler):
         - send_release
         - send_complete
         """
-        log.info('on_message')
-        log.info(message)
+        log.debug(message)
         try:
             if not message:
-                log.error('if not message:')
+                log.debug('if not message:')
                 return
             pck = Packet(raw=message)
             if not pck.valid:
-                # log.error('if not pck.valid')
+                log.debug('if not pck.valid')
                 return
 
             {Packet.PACKET_SEND: self.on_packet_send,
@@ -454,7 +485,6 @@ class WebSocketHandler(Handler):
 
     def packet_send_business_server(self, packet):
         url = g_CONFIG['forward_url'] + str(packet.msgtype) + '/'
-        log.info('url = %s' % url)
 
         req = self.make_request(url, 'POST', body=packet.data)
 
@@ -467,53 +497,50 @@ class WebSocketHandler(Handler):
     def on_packet_send(self, packet):
         """收到PACKET_SEND消息
         """
-        log.info('on_packet_send func')
+        try:
+            log.debug('on_packet_send func')
+            if packet.qos == 2 and \
+                    (packet.dup == 1 and
+                        packet.message_id in self.received_message_ids):
+                log.info(u'重复消息，不再发去业务服务器')
+                return
+            else:
+                try:
+                    if packet.qos == 2:
+                        self.received_message_ids.append(packet.message_id)
+                    rsp = yield self.packet_send_business_server(packet)
+                    self.rainbow_handle_header(rsp.headers)
+                    data = rsp.body or None
+                except Exception, e:
+                    if packet.qos == 2:
+                        self.received_message_ids.remove(packet.message_id)
+                    log.warning(e)
+                    log.warning(traceback.format_exc())
+                    if settings.DEBUG:
+                        data = traceback.format_exc()
+                    else:
+                        return
 
-        if packet.qos == 2 and \
-                (packet.dup == 1 and
-                    packet.message_id in self.received_message_ids):
-            log.debug(u'重复消息，不再发去业务服务器')
-            return
-        else:
-            try:
-                log.debug('before yield self.packet_send_business_server()')
-                if packet.qos == 2:
-                    self.received_message_ids.append(packet.message_id)
-                rsp = yield self.packet_send_business_server(packet)
-                self.rainbow_handle_header(rsp.headers)
-                data = rsp.body or None
-            except Exception, e:
-                if packet.qos == 2:
-                    self.received_message_ids.remove(packet.message_id)
-                log.warning(e)
-                log.warning(traceback.format_exc())
-                if settings.DEBUG:
-                    data = traceback.format_exc()
-                else:
-                    return
+            if packet.qos == 0:
+                return
+            elif packet.qos == 1:
+                command = Packet.PACKET_ACK
+            elif packet.qos == 2:
+                command = Packet.PACKET_REC
+            rp = Packet(command=command,
+                        message_id=packet.message_id,
+                        data=data)
+            self.write_message(rp.raw, binary=True)
 
-        log.info(data)
-        if packet.qos == 0:
-            return
-        elif packet.qos == 1:
-            command = Packet.PACKET_ACK
-        elif packet.qos == 2:
-            command = Packet.PACKET_REC
-        rp = Packet(command=command,
-                    message_id=packet.message_id,
-                    data=data)
-        # todo test
-        # http回来前, websocket 已经关闭, 是什么效果
-        # on_close已经把 futrue 回复了一个close
-        self.write_message(rp.raw, binary=True)
-        log.info('after self.write_message(rp.raw)')
-        log.debug('rp.raw = %s' % rp.raw)
+        except Exception, e:
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     # 服务器主动发消息的返回
     def on_packet_ack(self, packet):
         """收到PACKET_ACK消息, 结果要通知给http的回调者。这里要怎么搞？
         """
-        log.info('on_packet_ack func')
+        log.debug('on_packet_ack func')
 
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
@@ -525,7 +552,7 @@ class WebSocketHandler(Handler):
     def on_packet_rec(self, packet):
         """收到PACKET_REC消息, 要通知给http调用者。
         """
-        log.info('on_packet_rec func')
+        log.debug('on_packet_rec func')
 
         handle_response = self.future_rsp_hl.get(packet.message_id)
         if handle_response:
@@ -535,28 +562,37 @@ class WebSocketHandler(Handler):
             # 但是 rainbow 已经保证了此次发送成功并且只发送一次
             # 所以直接回复 rel 是 OK 的
 
-        packet = Packet(command=Packet.PACKET_REL,
-                        message_id=packet.message_id)
-        self.write_message(packet.raw, binary=True)
+        rp = Packet(command=Packet.PACKET_REL, message_id=packet.message_id)
+        try:
+            self.write_message(rp.raw, binary=True)
+        except Exception, e:
+            log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     # 客户端主动发消息的相应
     def on_packet_rel(self, packet):
         """收到PACKET_REL消息，删除消息ID，返回COM消息。
         """
-        log.info('on_packet_rel func')
+        log.debug('on_packet_rel func')
         if packet.message_id not in self.received_message_ids:
             pass
         else:
             self.received_message_ids.remove(packet.message_id)
 
         rp = Packet(command=Packet.PACKET_COM, message_id=packet.message_id)
-        self.write_message(rp.raw, binary=True)
+        try:
+            self.write_message(rp.raw, binary=True)
+        except Exception, e:
+            log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     # 服务器主动发消息的返回
     def on_packet_com(self, packet):
         """收到PACKET_COM消息。删除消息ID即可。
         """
-        log.info('on_packet_com func')
+        log.debug('on_packet_com func')
         # todo 收不到 com, 要多发几次rel
 
         # if packet.message_id in self.pendding_message_ids:
@@ -564,18 +600,19 @@ class WebSocketHandler(Handler):
 
     # 服务器主动发消息成功后的回调
     def send_packet_cb(self, channel, message_id, packet, exception):
-        log.info('send_packet_cb func')
+        log.debug('send_packet_cb func')
         if self.rsp_timeout_hl:
             # 如果是on_close 触发的 回调，就已经去掉timeout了
             toh = self.rsp_timeout_hl.get(message_id)
             if toh:
                 IOLoop.current().remove_timeout(toh)
                 del self.rsp_timeout_hl[message_id]
-        send_msg_response(channel, message_id, self, error=exception)
+        send_msg_response(
+            channel, message_id, self, data=packet.data, error=exception)
 
     # 服务器主动发消息后的超时
     def send_packet_cb_timeout(self, channel, message_id, packet, cnt):
-        log.info('send_packet_cb_timeout func')
+        log.debug('send_packet_cb_timeout func')
         if cnt <= 0:
             toh = self.rsp_timeout_hl.get(message_id)
             if toh:
@@ -592,8 +629,10 @@ class WebSocketHandler(Handler):
             self.rsp_timeout_hl[message_id] = toh
             try:
                 self.write_message(packet.raw, binary=True)
-            except WebSocketClosedError:
+            except Exception, e:
                 log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
+                log.warning(e)
+                log.warning(traceback.format_exc())
 
     @classmethod
     def shutdown(cls):
@@ -656,47 +695,50 @@ class WebSocketHandler(Handler):
     def get(self, *args, **kwds):
         """在打开websocket前先进行权限校验，如果没权限直接断开连接。
         """
-        self.handler_init()
-        log.info(u'get func 在打开websocket前先进行权限校验，如果没权限直接断开连接')
+        try:
+            self.handler_init()
+            log.debug(u'在打开websocket前先进行权限校验，如果没权限直接断开连接')
 
-        connect_flag = False
-        req = self.get_valid_req_params()
-        if req:
+            connect_flag = False
+            req = self.get_valid_req_params()
+            if req:
+                try:
+                    rsp = yield self.valid_request(req)
+                    body = json.loads(rsp.body)
+                    log.debug(u'get func body = %s' % body)
+                    if body['status'] == 'success':
+                        connect_flag = True
+                        self.rainbow_handle_header(rsp.headers)
+                except Exception, e:
+                    log.info(e)
+                    log.info(traceback.format_exc())
+            if not connect_flag:
+                log.warning('invalid request, close!')
+                self.set_status(401)
+                self.finish('HTTP/1.1 401 Unauthorized\r\n\r\n'
+                            'Not authenticated')
+                return
             try:
-                rsp = yield self.valid_request(req)
-                body = json.loads(rsp.body)
-                log.info(u'get func body = %s' % body)
-                if body['status'] == 'success':
-                    connect_flag = True
-                    self.rainbow_handle_header(rsp.headers)
+                super(WebSocketHandler, self).get(*args, **kwds)
             except Exception, e:
+                log.info(u'业务服务器校验返回前,客户端已经关闭了')
                 log.info(e)
                 log.info(traceback.format_exc())
 
-        if not connect_flag:
-            log.warning('invalid request, close!')
-            self.set_status(401)
-            self.finish('HTTP/1.1 401 Unauthorized\r\n\r\nNot authenticated')
-            return
-        log.info('super(WebSocketHandler, self).get(*args, **kwds)')
-
-        try:
-            super(WebSocketHandler, self).get(*args, **kwds)
         except Exception, e:
-            log.info(u'业务服务器校验返回前,客户端已经关闭了')
-            log.info(e)
-            log.info(traceback.format_exc())
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     def check_origin(self, origin):
         """ 在 get 会去验证 connect 这里返回 True就可以
         """
-        log.info('check_origin func')
+        log.debug('check_origin func')
         return True
 
     def valid_request(self, req):
         """检查该请求是否合法，如果合法则返回channel，否则为空。
         """
-        log.info('valid_request func')
+        log.debug('valid_request func')
 
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)
@@ -773,7 +815,7 @@ class WebSocketHandler(Handler):
         return req
 
     def on_close_cb(self):
-        log.info('on_close_cb func')
+        log.debug('on_close_cb func')
         req = self.make_request(g_CONFIG['close_url'], 'GET')
         http_client = AsyncHTTPClient()
         return http_client.fetch(req)

@@ -135,6 +135,7 @@ class SendMessageHandler(WebHandler):
         """发送完成了，返回数据给客户端
             response = {'connections': 2, 'data': xxxx}
         """
+        log.debug('response = %s' % response)
         if getattr(self, 'timeout', None):
             log.info('already timeout return')
             return

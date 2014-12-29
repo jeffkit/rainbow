@@ -751,12 +751,18 @@ class WebSocketHandler(Handler):
         for k, v in self.request.arguments.iteritems():
             req_headers[k] = v[0]
 
-        del req_headers['Upgrade']
-        del req_headers['Sec-Websocket-Version']
-        del req_headers['Sec-Websocket-Key']
-        del req_headers['Connection']
-        del req_headers['Origin']
-        del req_headers['Host']  # Host 是坏人，会导致nginx502和599
+        if req_headers.get('Upgrade') is not None:
+            del req_headers['Upgrade']
+        if req_headers.get('Sec-Websocket-Version') is not None:
+            del req_headers['Sec-Websocket-Version']
+        if req_headers.get('Sec-Websocket-Key') is not None:
+            del req_headers['Sec-Websocket-Key']
+        if req_headers.get('Connection') is not None:
+            del req_headers['Connection']
+        if req_headers.get('Origin') is not None:
+            del req_headers['Origin']
+        if req_headers.get('Host') is not None:
+            del req_headers['Host']  # Host 是坏人，会导致nginx502和599
 
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=req_headers)

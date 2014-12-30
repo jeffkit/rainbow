@@ -264,7 +264,7 @@ class WebSocketHandler(Handler):
         set_identity_hdl(self.identity, self)
         log.info('Open connection for %s finish' % self.identity)
 
-        self.ping()
+        self.ping('')
 
     def on_pong(self, data):
         log.debug('on_pong data = %s' % data)

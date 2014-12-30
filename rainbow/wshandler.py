@@ -292,13 +292,13 @@ class WebSocketHandler(Handler):
             log.debug('keepalive_close will close handler for identity = %s' %
                       self.identity)
 
+            self.close_funcs()
+
             try:
                 yield self.on_close_cb()
             except Exception, e:
                 log.error(e)
                 log.error(traceback.format_exc())
-
-            self.close_funcs()
 
             self.close()
 
@@ -335,14 +335,12 @@ class WebSocketHandler(Handler):
         log.debug(self.future_rsp_hl)
         for message_id, handle_response in self.future_rsp_hl.iteritems():
             try:
-                handle_response(exception='on_close')
+                handle_response(exception='handler_close')
             except Exception, e:
                 log.error('handler_close exception')
                 log.error(e)
                 log.error(traceback.format_exc())
 
-        # self.future_rsp_hl = None
-        # self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
     @tornado.gen.coroutine

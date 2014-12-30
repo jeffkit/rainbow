@@ -302,7 +302,7 @@ class WebSocketHandler(Handler):
         self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
-    @tornado.gen.coroutine
+    # @tornado.gen.coroutine
     def on_close(self):
         """从handler_map移除掉handler
         """
@@ -310,11 +310,11 @@ class WebSocketHandler(Handler):
             log.debug('on_close will close handler for identity = %s' %
                       self.identity)
 
-            try:
-                yield self.on_close_cb()
-            except Exception, e:
-                log.error(e)
-                log.error(traceback.format_exc())
+            # try:
+            #     yield self.on_close_cb()
+            # except Exception, e:
+            #     log.error(e)
+            #     log.error(traceback.format_exc())
 
             self.handler_close()
 

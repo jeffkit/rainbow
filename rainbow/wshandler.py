@@ -398,10 +398,12 @@ class WebSocketHandler(Handler):
             if timeout > 1:
                 # todo 处理重发的
                 timeout = timeout - 1
+
+            cnt = int(timeout / WebSocketHandler.RB_Timeout)  # 重试次数
             for identity, handler in handlers.iteritems():
                 handler.send_packet(
                     channel, message_id_channel,
-                    msgtype, data, qos, timeout)
+                    msgtype, data, qos, cnt)
         else:
             # 没有客户端在线
             if web_handle_response:
@@ -409,7 +411,7 @@ class WebSocketHandler(Handler):
 
     def send_packet(
             self, channel, message_id_channel,
-            msgtype, data, qos=0, timeout=0):
+            msgtype, data, qos=0, cnt=0):
         """此方法需要返回Future
         """
         packet = Packet(command=Packet.PACKET_SEND,
@@ -459,7 +461,6 @@ class WebSocketHandler(Handler):
                     future.set_exception(exception)
             self.future_rsp_hl[message_id] = handle_response
 
-            cnt = int(timeout / self.RB_Timeout)  # 重试次数
             toh = IOLoop.current().add_timeout(
                 time.time() + self.RB_Timeout,
                 self.send_packet_cb_timeout,

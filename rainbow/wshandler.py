@@ -253,6 +253,7 @@ class Packet(object):
 
 class WebSocketHandler(Handler):
     RB_Timeout = 5
+    RB_Keepalive_Timeout = 20
     socket_handlers = {}
     socket_handlers2 = {}
 
@@ -262,6 +263,53 @@ class WebSocketHandler(Handler):
         """
         set_identity_hdl(self.identity, self)
         log.info('Open connection for %s finish' % self.identity)
+
+        self.ping()
+
+    def on_pong(self, data):
+        log.debug('on_pong data = %s' % data)
+        log.debug('*' * 20)
+        log.debug('*' * 20)
+        log.debug('*' * 20)
+        log.debug('*' * 20)
+        log.debug('*' * 20)
+        toh_ping = getattr(self, 'toh_ping', None)
+        if toh_ping:
+            IOLoop.current().remove_timeout(toh_ping)
+            self.toh_ping = None
+
+    def keep_alive(self):
+        toh_ping = getattr(self, 'toh_ping', None)
+        if toh_ping:
+            return
+
+        self.toh_ping = IOLoop.current().add_timeout(
+            time.time() + self.RB_Keepalive_Timeout,
+            self.keepalive_close)
+
+        self.ping('')
+
+    @tornado.gen.coroutine
+    def keepalive_close(self):
+        """从handler_map移除掉handler
+        """
+        try:
+            log.debug('keepalive_close will close handler for identity = %s' %
+                      self.identity)
+
+            try:
+                yield self.on_close_cb()
+            except Exception, e:
+                log.error(e)
+                log.error(traceback.format_exc())
+
+            self.close_funcs()
+
+            self.close()
+
+        except Exception, e:
+            log.warning(e)
+            log.warning(traceback.format_exc())
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
@@ -316,23 +364,26 @@ class WebSocketHandler(Handler):
                 log.error(e)
                 log.error(traceback.format_exc())
 
-            self.handler_close()
-
-            self.channel_on_close()
-
-            log.debug('self.channels = %s' % self.channels)
-            for channel in self.channels:
-                handlers = WebSocketHandler.socket_handlers2.get(channel, None)
-                if not handlers:
-                    # 如果这个 channel 的没有客户端
-                    clear_channel_msg_data(channel)
-
-            log.debug('WebSocketHandler.socket_handlers2 = %s' %
-                      WebSocketHandler.socket_handlers2)
+            self.close_funcs()
 
         except Exception, e:
             log.warning(e)
             log.warning(traceback.format_exc())
+
+    def close_funcs(self):
+        self.handler_close()
+
+        self.channel_on_close()
+
+        log.debug('self.channels = %s' % self.channels)
+        for channel in self.channels:
+            handlers = WebSocketHandler.socket_handlers2.get(channel, None)
+            if not handlers:
+                # 如果这个 channel 的没有客户端
+                clear_channel_msg_data(channel)
+
+        log.debug('WebSocketHandler.socket_handlers2 = %s' %
+                  WebSocketHandler.socket_handlers2)
 
     @classmethod
     def send_message(
@@ -569,9 +620,6 @@ class WebSocketHandler(Handler):
         log.debug('on_packet_com func')
         # todo 收不到 com, 要多发几次rel
 
-        # if packet.message_id in self.pendding_message_ids:
-        #     self.pendding_message_ids.remove(packet.message_id)
-
     # 服务器主动发消息成功后的回调
     def send_packet_cb(self, channel, message_id, packet, exception):
         log.debug('send_packet_cb func')
@@ -594,6 +642,9 @@ class WebSocketHandler(Handler):
             if toh:
                 del self.rsp_timeout_hl[message_id]
             send_msg_response(channel, message_id, self, error='timeout')
+
+            # 客户端可能断网或者切换了网络
+            self.keep_alive()
         else:
             toh = IOLoop.current().add_timeout(
                 time.time() + self.RB_Timeout,

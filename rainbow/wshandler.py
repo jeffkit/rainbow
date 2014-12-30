@@ -580,8 +580,10 @@ class WebSocketHandler(Handler):
             if toh:
                 IOLoop.current().remove_timeout(toh)
                 del self.rsp_timeout_hl[message_id]
+
+        data = packet.data if packet else ''
         send_msg_response(
-            channel, message_id, self, data=packet.data, error=exception)
+            channel, message_id, self, data=data, error=exception)
 
     # 服务器主动发消息后的超时
     def send_packet_cb_timeout(self, channel, message_id, packet, cnt):

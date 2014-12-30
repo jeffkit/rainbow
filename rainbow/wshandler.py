@@ -785,7 +785,7 @@ class WebSocketHandler(Handler):
             self.get_query_argument(platform1, '')
         if not deviceid or not platform:
             log.warning('if not deviceid or not platform')
-            # return None
+            return None
         ip = self.request.remote_ip
 
         identity_raw = '%s.%s.%s.%f' % (platform, deviceid, ip, time.time())

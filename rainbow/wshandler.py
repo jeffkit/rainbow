@@ -264,13 +264,8 @@ class WebSocketHandler(Handler):
         set_identity_hdl(self.identity, self)
         log.info('Open connection for %s finish' % self.identity)
 
-        self.ping('')
-
     def on_pong(self, data):
         log.debug('on_pong data = %s' % data)
-        log.debug('*' * 20)
-        log.debug('*' * 20)
-        log.debug('*' * 20)
         log.debug('*' * 20)
         log.debug('*' * 20)
         toh_ping = getattr(self, 'toh_ping', None)
@@ -346,8 +341,8 @@ class WebSocketHandler(Handler):
                 log.error(e)
                 log.error(traceback.format_exc())
 
-        self.future_rsp_hl = None
-        self.rsp_timeout_hl = None
+        # self.future_rsp_hl = None
+        # self.rsp_timeout_hl = None
         clear_identity_hdl(self.identity, self)
 
     @tornado.gen.coroutine

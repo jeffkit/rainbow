@@ -3,8 +3,7 @@ import time
 import json
 import struct
 import traceback
-from hashlib import sha256, sha1
-import random
+from hashlib import sha256
 import urllib
 import logging as log
 
@@ -19,6 +18,7 @@ from tornado.websocket import WebSocketClosedError
 
 from config import g_CONFIG
 import settings
+from api import param_signature
 
 USER_ID_HASH = 'websocket_connected_users'
 
@@ -252,7 +252,7 @@ class Packet(object):
 
 
 class WebSocketHandler(Handler):
-    RB_Timeout = 5
+    RB_Timeout = 3
     RB_Keepalive_Timeout = 20
     socket_handlers = {}
     socket_handlers2 = {}
@@ -396,7 +396,6 @@ class WebSocketHandler(Handler):
                         web_handle_response, client_count)
 
             if timeout > 1:
-                # todo 处理重发的
                 timeout = timeout - 1
 
             cnt = int(timeout / WebSocketHandler.RB_Timeout)  # 重试次数
@@ -404,6 +403,9 @@ class WebSocketHandler(Handler):
                 handler.send_packet(
                     channel, message_id_channel,
                     msgtype, data, qos, cnt)
+
+            if qos == 0:
+                web_handle_response({})
         else:
             # 没有客户端在线
             if web_handle_response:
@@ -906,13 +908,3 @@ def unsub(identity, channel):
     if wshandler:
         wshandler.channel_remove(channel)
     return True, None
-
-
-def param_signature():
-    ts = int(time.time())
-    nonce = random.randint(1000, 99999)
-    sign_ele = [g_CONFIG['security_token'], str(ts), str(nonce)]
-    sign_ele.sort()
-    sign = sha1(''.join(sign_ele)).hexdigest()
-    params = {'timestamp': ts, 'nonce': nonce, 'signature': sign}
-    return params

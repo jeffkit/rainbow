@@ -5,6 +5,7 @@ import time
 import logging as log
 from hashlib import sha1
 import traceback
+import urllib
 
 import tornado.web
 from tornado.ioloop import IOLoop
@@ -12,9 +13,13 @@ from wshandler import WebSocketHandler
 from wshandler import sub, unsub
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
+from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import HTTPRequest
 
 import settings
 from config import g_CONFIG
+from config import g_Online_Server_List
+from api import param_signature
 
 
 def fetch_msg(uid, msg_type, data, qos, timeout, callback=None):
@@ -105,23 +110,27 @@ class SendMessageHandler(WebHandler):
         """
         try:
             channel = self.get_query_argument('channel', '')
-            log.debug('channel = %s' % channel)
             if not channel:
                 return error_rsp(self, 1, 'channel miss')
             msgtype = int(self.get_query_argument('msgtype', '1'))
             qos = int(self.get_query_argument('qos', 2))
+            if qos < 0 or qos > 2:
+                return error_rsp(self, 1, 'qos level error')
             self.qos = qos
             timeout = int(self.get_query_argument('timeout', '10'))
             if timeout <= 0:
                 timeout = 10
             data = self.request.body
+            self.server_cnt = 1
+            self.server_rsp_cnt = 0
 
             # 如果是集群模式，则直接调用其他服务器的接口。
-            # 发送消息前，先看看uid分布在哪些机器上，然后去调用它们的发送接口。
+            if not self.get_query_argument('cluster', ''):
+                self.cluster_send_message(channel, msgtype, qos, timeout, data)
 
             log.debug('SendMessageHandler body = %s' % self.request.body)
             log.debug('SendMessageHandler channel = %s' % channel)
-            fetch_msg(channel, msgtype, data, qos, timeout, self.send_finish)
+            fetch_msg(channel, msgtype, data, qos, timeout, self.fetch_msg_cb)
 
             self.toh = IOLoop.current().add_timeout(
                 time.time() + timeout or 10,
@@ -129,23 +138,57 @@ class SendMessageHandler(WebHandler):
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
-    def send_finish(self, response):
-        """发送完成了，返回数据给客户端
-            response = {'connections': 2, 'data': xxxx}
-        """
-        log.debug('response = %s' % response)
+    # def send_finish(self, response):
+    #     """发送完成了，返回数据给客户端
+    #         response = {'connections': 2, 'data': xxxx}
+    #     """
+    #     log.debug('response = %s' % response)
+    #     if getattr(self, 'timeout', None):
+    #         log.info('already timeout return')
+    #         return
+
+    #     IOLoop.current().remove_timeout(self.toh)
+
+    #     data = {'status': 0}
+    #     if self.qos > 0:
+    #         rb_connections = getattr(self, 'rb_connections', 0)
+    #         rb_data = getattr(self, 'rb_data', '')
+    #         data['connections'] = response['connections'] + rb_connections
+    #         data['data'] = response['data'] or rb_data
+    #     data = json.dumps(data)
+
+    #     log.debug('SendMessageHandler send_finish data = %s' % data)
+    #     try:
+    #         self.finish(data)
+    #     except Exception, e:
+    #         self.exception_finish(e, traceback.format_exc())
+
+    def fetch_msg_cb(self, response):
+        log.debug(response)
+        self.server_rsp_cnt = self.server_rsp_cnt + 1
+        if self.qos > 0:
+            self.rb_connections = getattr(
+                self, 'rb_connections', 0) + response['connections']
+            self.rb_data = response['data'] or getattr(self, 'rb_data', '')
+
+        if self.server_rsp_cnt == self.server_cnt:
+            self.send_finish()
+
+    def send_finish(self):
+        log.debug('')
         if getattr(self, 'timeout', None):
             log.info('already timeout return')
             return
-
         IOLoop.current().remove_timeout(self.toh)
-
+        if getattr(self, 'rb_finish', None):
+            log.info('already finish return')
+            return
+        self.rb_finish = True
         data = {'status': 0}
         if self.qos > 0:
-            data['connections'] = response['connections']
-            data['data'] = response['data']
+            data['connections'] = getattr(self, 'rb_connections', 0)
+            data['data'] = getattr(self, 'rb_data', '')
         data = json.dumps(data)
-
         log.debug('SendMessageHandler send_finish data = %s' % data)
         try:
             self.finish(data)
@@ -160,6 +203,49 @@ class SendMessageHandler(WebHandler):
             self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
+
+    def cluster_send_message(self, channel, msgtype, qos, timeout, body):
+        try:
+            params = param_signature()
+            params['channel'] = channel
+            params['msgtype'] = msgtype
+            params['qos'] = qos
+            if timeout >= 4:
+                timeout = timeout - 1
+            params['timeout'] = timeout
+            params['cluster'] = '1'
+            params_str = urllib.urlencode(params)
+
+            for server in g_Online_Server_List:
+                self.server_cnt = self.server_cnt + 1
+                log.debug('self.server_cnt = %d' % self.server_cnt)
+                url = '%s/send/?%s' % (server, params_str)
+                req = HTTPRequest(
+                    url=url, method='POST', body=body,
+                    connect_timeout=20, request_timeout=20)
+                http_client = AsyncHTTPClient()
+                http_client.fetch(req, self.cluster_send_msg_cb)
+        except Exception, e:
+            log.warning(e)
+            log.warning(traceback.format_exc())
+
+    def cluster_send_msg_cb(self, rsp):
+        log.debug('')
+        self.server_rsp_cnt = self.server_rsp_cnt + 1
+        # 集群的其它 server 返回
+        if rsp.error:
+            log.warning('rsp.error = %s' % rsp.error)
+        else:
+            log.debug('rsp.body = %s' % rsp.body)
+            if self.qos > 0:
+                body = json.loads(rsp.body)
+                if body['status'] == 0:
+                    self.rb_connections = getattr(
+                        self, 'rb_connections', 0) + body['connections']
+                    self.rb_data = getattr(self, 'rb_data', '') or body['data']
+
+        if self.server_rsp_cnt == self.server_cnt:
+            self.send_finish()
 
 
 class SubChannelHandler(WebHandler):
@@ -214,3 +300,10 @@ class UnSubChannelHandler(WebHandler):
             self.finish(json.dumps(data))
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
+
+
+class HelloHandler(tornado.web.RequestHandler):
+
+    @tornado.web.asynchronous
+    def get(self):
+        self.finish('ok')

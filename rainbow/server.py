@@ -7,6 +7,8 @@ import settings
 import logging as log
 log.basicConfig(level=settings.LOG_LEVEL, format=settings.LOG_FORMAT)
 import traceback
+import json
+import socket
 
 import tornado.web
 import tornado.ioloop
@@ -16,6 +18,7 @@ from wshandler import WebSocketHandler
 from webhandler import SendMessageHandler
 from webhandler import SubChannelHandler
 from webhandler import UnSubChannelHandler
+from webhandler import HelloHandler
 
 
 from config import g_CONFIG
@@ -23,26 +26,35 @@ from config import g_CONFIG
 
 def init_config():
     parser = OptionParser()
-    parser.add_option("-f", "--file", dest="config_filename",
-                      help="write report to FILE", metavar="FILE")
+    parser.add_option("-f", "--file", dest="config_filename", type="string")
+    parser.add_option("-p", "--port", dest="port", type="string")
     options, args = parser.parse_args()
     if not getattr(options, 'config_filename', None):
+        log.error('miss -f')
+        return False
+    if not getattr(options, 'port', None):
+        log.error('miss -p')
         return False
     config_filename = options.config_filename
+    port = options.port
 
     try:
         config = ConfigParser.SafeConfigParser()
         config.read(config_filename)
         g_CONFIG['connect_url'] = config.get("main", "connect_url")
-        g_CONFIG['socket_port'] = int(config.get("main", "socket_port"))
-        g_CONFIG['http_port'] = config.get("main", "http_port")
+        # g_CONFIG['socket_port'] = int(config.get("main", "socket_port"))
+        # g_CONFIG['http_port'] = config.get("main", "http_port")
         g_CONFIG['security_token'] = config.get("main", "security_token")
         g_CONFIG['forward_url'] = config.get("main", "forward_url")
         g_CONFIG['close_url'] = config.get("main", "close_url")
+        g_CONFIG['udp_ports'] = json.loads(config.get("main", "udp_ports"))
+        g_CONFIG['local_ip'] = socket.gethostbyname(socket.gethostname())
     except Exception, e:
         log.error(e)
         log.error(traceback.format_exc())
         return False
+
+    g_CONFIG['socket_port'] = int(port)
 
     log.info(g_CONFIG)
     return True
@@ -60,6 +72,7 @@ application = tornado.web.Application([
     (r'/send/', SendMessageHandler),
     (r'/sub/', SubChannelHandler),
     (r'/unsub/', UnSubChannelHandler),
+    (r'/hello/', HelloHandler),
 ])
 
 
@@ -93,6 +106,20 @@ def sig_handler(sig, frame):
     tornado.ioloop.IOLoop.instance().add_callback(shutdown)
 
 
+def udp_handler():
+    import thread
+    from discover import udp_listen
+    log.debug('before')
+    thread.start_new_thread(udp_listen, ())
+    log.debug('after')
+
+
+def udp_send():
+    import thread
+    from discover import send_broadcast
+    thread.start_new_thread(send_broadcast, ())
+
+
 def main():
     ret = init_config()
     if not ret:
@@ -110,6 +137,9 @@ def main():
     if not standalone:
         # TODO: 到redis注册一下。需要心跳。
         pass
+
+    udp_handler()
+    udp_send()
     tornado.ioloop.IOLoop.instance().start()
 
     if not standalone:

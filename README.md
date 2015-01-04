@@ -41,12 +41,6 @@ RainBow服务器
 	# 连接验证接口, 用于对连接上来的客户端进行鉴权，失败者不能建立连接
 	connect_url = http://localhost:8000/connect/
 	
-	# 与客户端连接的websocket端口，默认为1984
-	socket_port = 1984  
-	
-	# 被业务逻辑服务器调用的http端口，默认为2501
-	http_port = 2501  
-	
 	# 用于与业务逻辑服务器相互调用时签名的token
 	security_token = xxxxxxx 
 	
@@ -58,9 +52,14 @@ RainBow服务器
 	# 客户端关闭连接的通知接口
 	close_url = http://localhost:8000/close/
 
+	# 集群的实例使用了的端口
+	# [1984,]
+	# [1984, 1985]
+	udp_ports = [1984, 1985, 1986]
+
 
 ### 运行
-	./rainbow-server -f /etc/rainbow/server.ini
+	./rainbow-server -f /etc/rainbow/server.ini -p 1984
 	
 业务服务器
 ---

@@ -9,6 +9,7 @@ log.basicConfig(level=settings.LOG_LEVEL, format=settings.LOG_FORMAT)
 import traceback
 import json
 import socket
+import thread
 
 import tornado.web
 import tornado.ioloop
@@ -19,6 +20,8 @@ from webhandler import SendMessageHandler
 from webhandler import SubChannelHandler
 from webhandler import UnSubChannelHandler
 from webhandler import HelloHandler
+from discover import broadcast_online, broadcast_offline
+from discover import udp_listen
 
 
 from config import g_CONFIG
@@ -79,6 +82,8 @@ application = tornado.web.Application([
 def shutdown():
     log.info('Stopping http server')
 
+    broadcast_offline()
+
     # 关闭本进程所有的客户端连接并将用户从在线列表中去掉。
     log.info('make all user offline')
     try:
@@ -107,17 +112,11 @@ def sig_handler(sig, frame):
 
 
 def udp_handler():
-    import thread
-    from discover import udp_listen
-    log.debug('before')
     thread.start_new_thread(udp_listen, ())
-    log.debug('after')
 
 
 def udp_send():
-    import thread
-    from discover import send_broadcast
-    thread.start_new_thread(send_broadcast, ())
+    thread.start_new_thread(broadcast_online, ())
 
 
 def main():

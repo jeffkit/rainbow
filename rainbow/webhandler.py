@@ -18,7 +18,9 @@ from tornado.httpclient import HTTPRequest
 
 import settings
 from config import g_CONFIG
-from config import g_Online_Server_List
+# from config import g_Online_Server
+# from config import g_Online_Server_List
+from config import g_Online_Server_deque
 from api import param_signature
 
 
@@ -216,7 +218,8 @@ class SendMessageHandler(WebHandler):
             params['cluster'] = '1'
             params_str = urllib.urlencode(params)
 
-            for server in g_Online_Server_List:
+            # for server in g_Online_Server_List:
+            for server in g_Online_Server_deque:
                 self.server_cnt = self.server_cnt + 1
                 log.debug('self.server_cnt = %d' % self.server_cnt)
                 url = '%s/send/?%s' % (server, params_str)

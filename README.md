@@ -37,70 +37,113 @@ RainBow服务器
 ### 配置
 修改/etc/rainbow/server.ini
 
-	# 用于对连接上来的客户端进行鉴权，失败者不能建立连接
-	auth_url: http://localhost:8000/auth/
-	
-	# 与客户端连接的socket端口，默认为1984
-	socket_port: 1984  
-	
-	# 被业务逻辑服务器调用的http端口，默认为2501
-	http_port:2501  
+	[main]
+	# 连接验证接口, 用于对连接上来的客户端进行鉴权，失败者不能建立连接
+	connect_url = http://localhost:8000/connect/
 	
 	# 用于与业务逻辑服务器相互调用时签名的token
-	security_key: xxxxxxx 
+	security_token = xxxxxxx 
 	
 	# 客户端上行的消息，转发至业务服务器的入口地址模板，需要提供{{message_type}}占位参数。
 	# RainBow会将上行的消息类型填充至该模板，并以POST JSON的方式将消息参数传递过去。
-	forward_url: http://localhost:8000/chat/{{message_type}}/
+	# 上行时 url将会是 http://localhost:8000/chat/{message_type}/
+	forward_url = http://localhost:8000/chat/
+
+	# 客户端关闭连接的通知接口
+	close_url = http://localhost:8000/close/
+
+	# 集群的实例使用了的端口
+	# [1984,]
+	# [1984, 1985]
+	udp_ports = [1984, 1985, 1986]
 
 
 ### 运行
-	./rainbow-server -f /etc/rainbow/server.ini
+	./rainbow-server -f /etc/rainbow/server.ini -p 1984
 	
 业务服务器
 ---
 
 业务服务器会主动调用Rainbow的接口，它的接口也会被Rainbow调用。接口调用的鉴权使用同样的逻辑。鉴权逻辑将稍后作详尽说明。
 
-### 实现接口
+#### 接口
 
-业务服务器需要至少实现两个接口。
+	自定义header参数
+	RAINBOWCLIENTCHANNEL, rainbow收到这个，表示给当前的websocket handler添加 channel
+	RAINBOWCLIENTCOOKIE, rainbow存放业务调用方的状态信息, 状态信息需要base64后再发到rainbow
+	RAINBOWCLIENTIDENTITY, 为一个客户端连接到rainbow的唯一标识
 
-#### 身份验证接口
+业务服务器需要实现以下接口。
 
-Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至该接口，接口判断所带上来的Header，参数等是否合法，如果合法则返回一个字典，包含标识客户端的唯一标识，可以是用户id或设备id等。
+### 连接验证接口
+Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至该接口，接口判断所带上来的Header，参数等是否合法，如果合法则返回一个json，包含标识客户端的唯一标识，可以是用户id或设备id等
 
-	{'status': 'success', 'uid': 'xxxwefujk'}
+	方法 get
+	返回值:
+
+		{'status': 'success'}
 	
-不合法则返回错误状态：
+	不合法则返回错误状态：
 
-	{'status': 'fail'}
+		{'status': 'fail'}
 
-此接口需要作为Rainbow的auth_url配置。
+	此接口需要作为Rainbow的 connect_url 配置。
 
-#### 消息回调接口
 
-客户端每上行一条消息，Rainbow都会转发至该接口，消息的类型会通过URL传递过来，消息体参数则会通过Json的方式POST过来。
+### 客户端关闭回调接口
+	方法 get 
 
-该接口的URL请预留部份给Rainbow传递消息类型。 如 http://localhost:8000/chat/{{message_type}}/
+	此接口需要作为Rainbow的 close_url 配置。
 
-此接口需要作为RainBow的forward_url配置
+
+### 消息回调接口
+
+客户端每上行一条消息，Rainbow都会转发至该接口，消息的类型会通过URL传递过来，消息体为请求的body
+
+该接口的URL请预留部份给Rainbow传递消息类型。 如 http://localhost:8000/chat/message_type/ message_type为0至65535的数字
+
+	此接口需要作为RainBow的forward_url配置
+	
+	方法 post
+
+
+
+#### Rainbow的接口
 
 ### 调用Rainbow接口发送消息
 	
 使用Rainbow的服务端 SDK或直接调用http请求均可。rainbow只暴露一个消息接口：
 
-	/send/?message_type=xxx&uid=yyyy
+	/send/?msgtype=xxx&channel=yyyy&qos=1&timeout=5
 
 	方法: POST
 
 	参数: 
-	- message_typ, 消息类型
-	- uid，用户的唯一id
+	- msgtype, 消息类型
+	- channel, 接收消息的客户端channel
+	- qos, 通讯质量
+	- timeout, 超时
 	post body: JSON数据。
 	
 	返回：
-	- 返回uid对应用户在线的终端类型。如 {'online_client': ['ios', 'android']}
+	- {'status': 0, 'connections': 5}
+	- 当qos==0时，不带 connections
+	- 当qos>=1时，connections 表示成功接收到消息的客户端数量
+
+
+### 订阅接口, 为客户端订阅某个channel
+	/sub/
+	方法 post
+	body, json {'identity': 'xxx', 'channel': 'xxx', 'occupy': 1}
+	occupy 可选，表示这个 identity 独占这个 channel
+
+
+### 取消订阅接口, 为客户端取消订阅某个channel
+	/unsub/
+	方法 post
+	body, json {'identity': 'xxx', 'channel': 'xxx'}
+
+
 
 客户端
 ---

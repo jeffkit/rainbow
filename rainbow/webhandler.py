@@ -9,8 +9,6 @@ import urllib
 
 import tornado.web
 from tornado.ioloop import IOLoop
-from wshandler import WebSocketHandler
-from wshandler import sub, unsub
 from tornado import stack_context
 from tornado.concurrent import TracebackFuture
 from tornado.httpclient import AsyncHTTPClient
@@ -18,6 +16,8 @@ from tornado.httpclient import HTTPRequest
 
 import settings
 from config import g_CONFIG
+from wshandler import WebSocketHandler
+from wshandler import sub, unsub
 # from config import g_Online_Server
 # from config import g_Online_Server_List
 from config import g_Online_Server_deque

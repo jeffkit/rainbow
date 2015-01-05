@@ -1,6 +1,12 @@
+# encoding=utf-8
 
+import sys
+import os
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parentdir)
 import json
 import urllib
+
 
 from tornado.test.util import unittest
 from tornado.testing import AsyncHTTPTestCase

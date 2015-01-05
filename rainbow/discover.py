@@ -104,6 +104,7 @@ def handle_expire():
 def broadcast_online():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
     data = {'msgtype': 'online', 'port': g_CONFIG['socket_port']}
     msg = json.dumps(data)
     while True:
@@ -117,13 +118,11 @@ def broadcast_online():
 
 
 def broadcast_offline():
+    log.info('i will be offline')
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
     data = {'msgtype': 'offline', 'port': g_CONFIG['socket_port']}
     msg = json.dumps(data)
-    try:
-        for udp_port in g_CONFIG['udp_ports']:
-            s.sendto(msg, ('<broadcast>', udp_port))
-    except Exception, e:
-        log.error(e)
-        log.error(traceback.format_exc())
+    for udp_port in g_CONFIG['udp_ports']:
+        s.sendto(msg, ('<broadcast>', udp_port))

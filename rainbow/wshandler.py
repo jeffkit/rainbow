@@ -250,6 +250,11 @@ class Packet(object):
     def valid(self):
         return self._valid
 
+    def packet_copy(self):
+        new_packet = Packet(self.raw)
+        new_packet._raw = None
+        return new_packet
+
 
 class WebSocketHandler(Handler):
     RB_Timeout = 3
@@ -642,13 +647,15 @@ class WebSocketHandler(Handler):
             # 客户端可能断网或者切换了网络
             self.keep_alive()
         else:
+            dup_packet = packet.packet_copy()
+            dup_packet.dup = 1
             toh = IOLoop.current().add_timeout(
                 time.time() + self.RB_Timeout,
                 self.send_packet_cb_timeout,
-                channel, message_id, packet, cnt - 1)
+                channel, message_id, dup_packet, cnt - 1)
             self.rsp_timeout_hl[message_id] = toh
             try:
-                self.write_message(packet.raw, binary=True)
+                self.write_message(dup_packet.raw, binary=True)
             except Exception, e:
                 log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
                 log.warning(e)

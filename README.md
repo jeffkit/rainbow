@@ -126,7 +126,7 @@ Rainbow会将客户端上行的websocket upgrade的Http请求的信息转发至�
 	post body: JSON数据。
 	
 	返回：
-	- {'status': 0, 'connections': 5}
+	- {'status': 0, 'connections': 5, 'data': 'xxx'}
 	- 当qos==0时，不带 connections
 	- 当qos>=1时，connections 表示成功接收到消息的客户端数量
 

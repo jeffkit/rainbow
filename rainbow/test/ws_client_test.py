@@ -199,12 +199,12 @@ def run_client():
 
 
 def main():
-    for i in range(1, 10):
+    for i in range(1, 2):
         thread.start_new_thread(run_client, ())
 
     while True:
-        for i in range(1, 10):
-            thread.start_new_thread(run_client, ())
+        # for i in range(1, 10):
+        #     thread.start_new_thread(run_client, ())
         time.sleep(random.randint(2, 10))
 
 

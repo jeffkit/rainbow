@@ -313,7 +313,6 @@ class WebSocketHandler(Handler):
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
-        log.info('handler_init func')
         self.future_rsp_hl = {}
         self.rsp_timeout_hl = {}
         self.pendding_message_ids = []
@@ -444,7 +443,7 @@ class WebSocketHandler(Handler):
                           channel, message_id_channel, message_id))
 
             def handle_future(future):
-                log.info('send_packet handle_future func')
+                log.debug('send_packet handle_future func')
                 packet = None
                 exception = ''
                 try:

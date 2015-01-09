@@ -8,6 +8,7 @@ import random
 import logging as log
 import traceback
 import thread
+import time
 
 from websocket import create_connection
 
@@ -93,9 +94,19 @@ class websocket_test(object):
 
     def create_connection(self):
         header = ["X-CLIENT-OS: ios7", ]
+        c = random.randint(1, 20)
+        header.append('User-Agent: aaa%d' % c)
         header.append('X-DEVICEID: ajokmksdm%f' % random.uniform(1, 10000000))
         self.ws = create_connection(
             "ws://192.168.0.111:1984/connect/", header=header)
+        self.message_id = 1
+
+    def get_next_messageid(self):
+        if self.message_id > 65530:
+            self.message_id = 1
+        else:
+            self.message_id = self.message_id + 1
+        return self.message_id
 
     def on_packet_send(self, packet):
         """收到PACKET_SEND消息
@@ -163,11 +174,20 @@ class websocket_test(object):
 
     def run(self):
         p = Packet(command=1, msgtype=1, data='Hello, World',
-                   qos=1, dup=0, message_id=234)
+                   qos=1, dup=0, message_id=self.get_next_messageid())
         self.ws.send_binary(p.raw)
-        while True:
+
+        cnt = random.randint(100, 200)
+        while cnt > 0:
+            cnt = cnt - 1
             msg = self.ws.recv()
             self.msg_handler(msg)
+            ret = random.randint(1, 4)
+            if ret <= 1:
+                p = Packet(
+                    command=1, msgtype=1, data='Hello, World',
+                    qos=ret, dup=0, message_id=self.get_next_messageid())
+                self.ws.send_binary(p.raw)
 
         self.ws.close()
 
@@ -179,9 +199,13 @@ def run_client():
 
 
 def main():
-    # for i in range(1, 50):
-    #     thread.start_new_thread(run_client, ())
-    run_client()
+    for i in range(1, 10):
+        thread.start_new_thread(run_client, ())
+
+    while True:
+        for i in range(1, 10):
+            thread.start_new_thread(run_client, ())
+        time.sleep(random.randint(2, 10))
 
 
 if __name__ == '__main__':

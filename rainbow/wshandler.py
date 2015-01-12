@@ -267,7 +267,7 @@ class WebSocketHandler(Handler):
         成功创建websocket连接，保存或更新用户信息。
         """
         set_identity_hdl(self.identity, self)
-        log.info('Open connection for %s finish' % self.identity)
+        log.info('Open connection finish for %s' % self.identity)
 
     def on_pong(self, data):
         log.debug('on_pong data = %s' % data)
@@ -352,8 +352,7 @@ class WebSocketHandler(Handler):
         """从handler_map移除掉handler
         """
         try:
-            log.debug('on_close will close handler for identity = %s' %
-                      self.identity)
+            log.info('on_close for identity = %s' % self.identity)
 
             try:
                 yield self.on_close_cb()
@@ -539,8 +538,8 @@ class WebSocketHandler(Handler):
                 except Exception, e:
                     if packet.qos == 2:
                         self.received_message_ids.remove(packet.message_id)
-                    log.warning(e)
-                    log.warning(traceback.format_exc())
+                    log.info(e)
+                    log.info(traceback.format_exc())
                     if settings.DEBUG:
                         data = traceback.format_exc()
                     else:
@@ -558,8 +557,8 @@ class WebSocketHandler(Handler):
             self.write_message(rp.raw, binary=True)
 
         except Exception, e:
-            log.warning(e)
-            log.warning(traceback.format_exc())
+            log.info(e)
+            log.info(traceback.format_exc())
 
     # 服务器主动发消息的返回
     def on_packet_ack(self, packet):

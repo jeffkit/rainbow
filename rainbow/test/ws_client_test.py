@@ -162,6 +162,27 @@ class websocket_test(object):
 
         self.ws.close()
 
+    def run2(self):
+        p = Packet(command=1, msgtype=1, data='Hello, World',
+                   qos=1, dup=0, message_id=self.get_next_messageid())
+        self.ws.send_binary(p.raw)
+
+        cnt = random.randint(10, 100)
+        while cnt > 0:
+            cnt = cnt - 1
+            msg = self.ws.recv()
+            if not msg:
+                break
+            self.msg_handler(msg)
+            ret = random.randint(1, 4)
+            if ret <= 1:
+                p = Packet(
+                    command=1, msgtype=1, data='Hello, World',
+                    qos=ret, dup=0, message_id=self.get_next_messageid())
+                self.ws.send_binary(p.raw)
+
+        self.ws.close()
+
 
 def run_client(channel):
     o = websocket_test()

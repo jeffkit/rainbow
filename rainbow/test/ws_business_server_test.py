@@ -40,7 +40,7 @@ def init_config():
         log.error('miss -f')
         return False
     if not getattr(options, 'requestcnt', None):
-        log.error('Options miss -c')
+        log.error('Options miss -r')
         return False
     if not getattr(options, 'httphost', None):
         log.error('Options miss --host')

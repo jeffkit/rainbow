@@ -146,9 +146,7 @@ class websocket_test(object):
                    qos=1, dup=0, message_id=self.get_next_messageid())
         self.ws.send_binary(p.raw)
 
-        # cnt = random.randint(100, 200)
         while True:
-                # cnt = cnt - 1
             msg = self.ws.recv()
             if not msg:
                 break
@@ -167,7 +165,7 @@ class websocket_test(object):
                    qos=1, dup=0, message_id=self.get_next_messageid())
         self.ws.send_binary(p.raw)
 
-        cnt = random.randint(10, 100)
+        cnt = random.randint(10, 30)
         while cnt > 0:
             cnt = cnt - 1
             msg = self.ws.recv()

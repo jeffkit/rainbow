@@ -70,13 +70,13 @@ def _run_request(channel):
     params = param_signature()
     params['channel'] = '%d' % channel
     params['qos'] = 2
-    params['timeout'] = 10
+    params['timeout'] = 4
     param_str = urllib.urlencode(params)
     url = 'http://%s/send/?%s' % (g_CONFIG['httphost'], param_str)
     body = 'message from business server'
     req = HTTPRequest(
         url=url, method='POST', body=body,
-        connect_timeout=10, request_timeout=10)
+        connect_timeout=5, request_timeout=5)
     try:
         timebegin = time.time()
         HTTPClient().fetch(req)

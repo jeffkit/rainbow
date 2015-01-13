@@ -141,7 +141,7 @@ class SendMessageHandler(WebHandler):
             self.exception_finish(e, traceback.format_exc())
 
     def fetch_msg_cb(self, response):
-        log.debug(response)
+        log.info(response)
         self.server_rsp_cnt = self.server_rsp_cnt + 1
         if self.qos > 0:
             self.rb_connections = getattr(
@@ -166,7 +166,7 @@ class SendMessageHandler(WebHandler):
             data['connections'] = getattr(self, 'rb_connections', 0)
             data['data'] = getattr(self, 'rb_data', '')
         data = json.dumps(data)
-        log.debug('SendMessageHandler send_finish data = %s' % data)
+        log.info('SendMessageHandler send_finish data = %s' % data)
         try:
             self.finish(data)
         except Exception, e:

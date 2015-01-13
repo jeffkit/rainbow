@@ -126,10 +126,10 @@ def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     finish_count = len(hdl_info['finish_list'])
     rsp_count = finish_count + len(hdl_info['error_list'])
 
-    log.debug('send_msg_response error_list %d' % len(hdl_info['error_list']))
-    log.debug('send_msg_response finish_count %d' % finish_count)
-    log.debug('send_msg_response rsp_count %d' % rsp_count)
-    log.debug('send_msg_response client_count = %d' % hdl_info['client_count'])
+    log.info('send_msg_response error_list %d' % len(hdl_info['error_list']))
+    log.info('send_msg_response finish_count %d' % finish_count)
+    log.info('send_msg_response rsp_count %d' % rsp_count)
+    log.info('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
         if hdl_info.get('web_handle_response'):
@@ -386,9 +386,9 @@ class WebSocketHandler(Handler):
         cls, channel, msgtype, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
-        log.debug('send_message WebSocketHandler.socket_handlers2 = %s' %
-                  WebSocketHandler.socket_handlers2)
-        log.debug('channel = %s' % channel)
+        log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
+        log.info('channel = %s' % channel)
 
         if handlers:
 
@@ -655,9 +655,9 @@ class WebSocketHandler(Handler):
             try:
                 self.write_message(dup_packet.raw, binary=True)
             except Exception, e:
-                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
-                log.warning(e)
-                log.warning(traceback.format_exc())
+                log.info(u'发消息前, 客户端关闭了WebSocketClosedError')
+                log.info(e)
+                log.info(traceback.format_exc())
 
     @classmethod
     def shutdown(cls):

@@ -34,7 +34,7 @@ def main():
         thread.start_new_thread(run_client, ())
 
     while True:
-        time.sleep(random.randint(10, 20))
+        time.sleep(random.randint(10, 100))
         for i in range(0, g_CONFIG['linkcnt']):
             time.sleep(0.01)
             thread.start_new_thread(run_client, ())

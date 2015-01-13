@@ -261,6 +261,7 @@ class SubWebHandler(WebHandler):
         if self.status == 1:
             data['msg'] = self.msg
         data = json.dumps(data)
+        log.info('data = %s' % data)
         try:
             self.finish(data)
         except Exception, e:

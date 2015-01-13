@@ -130,7 +130,7 @@ class SendMessageHandler(WebHandler):
             if not self.get_query_argument('cluster', ''):
                 self.cluster_send_message(channel, msgtype, qos, timeout, data)
 
-            log.debug('SendMessageHandler body = %s' % self.request.body)
+            log.info('SendMessageHandler body = %s' % self.request.body)
             log.debug('SendMessageHandler channel = %s' % channel)
             fetch_msg(channel, msgtype, data, qos, timeout, self.fetch_msg_cb)
 

@@ -30,6 +30,8 @@ def init_config():
             "-r", "--requestcnt", dest="requestcnt", type="int")
         parser.add_option(
             "-c", "--channelcnt", dest="channelcnt", type="int")
+        parser.add_option("--qos", dest="qos", type="int")
+
         options, args = parser.parse_args()
     except Exception, e:
         log.error(e)
@@ -61,6 +63,7 @@ def init_config():
     g_CONFIG['httphost'] = options.httphost
     g_CONFIG['requestcnt'] = options.requestcnt
     g_CONFIG['channelcnt'] = options.channelcnt
+    g_CONFIG['qos'] = options.qos
 
     log.info(g_CONFIG)
     return True
@@ -69,14 +72,14 @@ def init_config():
 def _run_request(channel):
     params = param_signature()
     params['channel'] = '%d' % channel
-    params['qos'] = 2
+    params['qos'] = g_CONFIG['qos']
     params['timeout'] = 4
     param_str = urllib.urlencode(params)
     url = 'http://%s/send/?%s' % (g_CONFIG['httphost'], param_str)
     body = 'message from business server'
     req = HTTPRequest(
         url=url, method='POST', body=body,
-        connect_timeout=5, request_timeout=5)
+        connect_timeout=10, request_timeout=10)
     try:
         timebegin = time.time()
         HTTPClient().fetch(req)

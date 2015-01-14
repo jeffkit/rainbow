@@ -142,10 +142,6 @@ class websocket_test(object):
             log.warning(msg)
 
     def run(self):
-        p = Packet(command=1, msgtype=1, data='Hello, World',
-                   qos=1, dup=0, message_id=self.get_next_messageid())
-        self.ws.send_binary(p.raw)
-
         while True:
             msg = self.ws.recv()
             if not msg:
@@ -161,9 +157,9 @@ class websocket_test(object):
         self.ws.close()
 
     def run2(self):
-        p = Packet(command=1, msgtype=1, data='Hello, World',
-                   qos=1, dup=0, message_id=self.get_next_messageid())
-        self.ws.send_binary(p.raw)
+        # p = Packet(command=1, msgtype=1, data='Hello, World',
+        #            qos=1, dup=0, message_id=self.get_next_messageid())
+        # self.ws.send_binary(p.raw)
 
         cnt = random.randint(10, 30)
         while cnt > 0:
@@ -199,7 +195,7 @@ def main():
 
     for channel in range(0, g_CONFIG['channelcnt']):
         for i in range(0, g_CONFIG['linkcnt']):
-            time.sleep(0.01)
+            time.sleep(0.02)
             thread.start_new_thread(run_client, (channel,))
 
     while True:

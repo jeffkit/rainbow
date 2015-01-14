@@ -211,16 +211,16 @@ class Packet(object):
 
         log.debug('command')
         log.debug(command)
-        # log.debug('msgtype')
-        # log.debug(msgtype)
+        log.debug('msgtype')
+        log.debug(msgtype)
         log.debug('qos')
         log.debug(qos)
-        # log.debug('dup')
-        # log.debug(dup)
+        log.debug('dup')
+        log.debug(dup)
         log.debug('message_id')
         log.debug(message_id)
-        # log.debug('data')
-        # log.debug(data)
+        log.debug('data')
+        log.debug(data)
 
         self.command = command  # 命令
         self.msgtype = msgtype

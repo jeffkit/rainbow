@@ -166,6 +166,7 @@ class SendMessageHandler(WebHandler):
             data['connections'] = getattr(self, 'rb_connections', 0)
             data['data'] = getattr(self, 'rb_data', '')
         data = json.dumps(data)
+        log.info('SendMessageHandler body = %s' % self.request.body)
         log.info('SendMessageHandler send_finish data = %s' % data)
         try:
             self.finish(data)
@@ -176,6 +177,7 @@ class SendMessageHandler(WebHandler):
         # 虽然超时，但是是否能够知道有部份成功发送？
         self.timeout = True
         log.info('SendMessageHandler timeout')
+        log.info('SendMessageHandler body = %s' % self.request.body)
         try:
             self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
         except Exception, e:

@@ -194,11 +194,12 @@ class SendMessageHandler(WebHandler):
             params['timeout'] = timeout
             params['cluster'] = '1'
             params_str = urllib.urlencode(params)
-
+            log.info('params = %s' % params_str)
+            log.info('g_Online_Server_deque = %s' % g_Online_Server_deque)
             # for server in g_Online_Server_List:
             for server in g_Online_Server_deque:
                 self.server_cnt = self.server_cnt + 1
-                log.debug('self.server_cnt = %d' % self.server_cnt)
+                log.info('self.server_cnt = %d' % self.server_cnt)
                 url = '%s/send/?%s' % (server, params_str)
                 req = HTTPRequest(
                     url=url, method='POST', body=body,
@@ -210,7 +211,7 @@ class SendMessageHandler(WebHandler):
             log.warning(traceback.format_exc())
 
     def cluster_send_msg_cb(self, rsp):
-        log.debug('')
+        log.info('')
         self.server_rsp_cnt = self.server_rsp_cnt + 1
         # 集群的其它 server 返回
         if rsp.error:

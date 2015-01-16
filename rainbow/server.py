@@ -15,6 +15,7 @@ from webhandler import SendMessageHandler
 from webhandler import SubChannelHandler
 from webhandler import UnSubChannelHandler
 from webhandler import HelloHandler
+from web.serverinfo import ServerInfoHandler
 from discover import broadcast_online, broadcast_offline
 from discover import udp_listen
 from api import init_config
@@ -36,6 +37,7 @@ application = tornado.web.Application([
     (r'/sub/', SubChannelHandler),
     (r'/unsub/', UnSubChannelHandler),
     (r'/hello/', HelloHandler),
+    (r'/serverinfo/', ServerInfoHandler),
 ])
 
 

@@ -75,7 +75,9 @@ class WebHandler(tornado.web.RequestHandler):
 
     @tornado.web.asynchronous
     def prepare(self):
-        if not is_signature(self):
+        """ need_sign 要指明 False 才不做签名检查
+        """
+        if getattr(self, 'need_sign', True) and not is_signature(self):
             return error_rsp(self, 1, 'signature error')
         return super(WebHandler, self).prepare()
 
@@ -229,7 +231,14 @@ class SendMessageHandler(WebHandler):
             self.send_finish()
 
 
-class SubWebHandler(WebHandler):
+class ClusterWebHandler(WebHandler):
+    """ 1.对集群各server 发消息前, 首先调用 cluster_init
+        2.对集群发送消息
+        if not self.get_query_argument('cluster', ''):
+            self.cluster_send_post(self.request.body, 'sub')
+        3.handler_return 处理返回的数据
+        4.send_finish 把数据返回给接口调用者
+    """
 
     def cluster_init(self):
         self.server_cnt = 1
@@ -246,10 +255,10 @@ class SubWebHandler(WebHandler):
             log.debug('rsp.body = %s' % rsp.body)
             data = json.loads(rsp.body)
 
-        self.sub_return(data)
+        self.handler_return(data)
 
-    def sub_return(self, data):
-        log.debug('SubWebHandler data = %s' % data)
+    def handler_return(self, data):
+        log.debug('ClusterWebHandler data = %s' % data)
         self.server_rsp_cnt = self.server_rsp_cnt + 1
         if data['status'] == 0:
             self.status = 0
@@ -270,7 +279,13 @@ class SubWebHandler(WebHandler):
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
-    def cluster_send(self, body, uri):
+    def cluster_send_post(self, body, uri):
+        self.cluster_send(uri, method='POST', body=body)
+
+    def cluster_send_get(self, uri):
+        self.cluster_send(uri, method='GET')
+
+    def cluster_send(self, uri, method, body=None):
         self.status = 1
         self.msg = ''
         try:
@@ -283,7 +298,7 @@ class SubWebHandler(WebHandler):
                 log.debug('self.server_cnt = %d' % self.server_cnt)
                 url = '%s/%s/?%s' % (server, uri, params_str)
                 req = HTTPRequest(
-                    url=url, method='POST', body=body,
+                    url=url, method=method, body=body,
                     connect_timeout=5, request_timeout=5)
                 http_client = AsyncHTTPClient()
                 http_client.fetch(req, self.cluster_send_cb)
@@ -292,7 +307,7 @@ class SubWebHandler(WebHandler):
             log.warning(traceback.format_exc())
 
 
-class SubChannelHandler(SubWebHandler):
+class SubChannelHandler(ClusterWebHandler):
 
     @tornado.web.asynchronous
     def post(self):
@@ -310,7 +325,7 @@ class SubChannelHandler(SubWebHandler):
             self.cluster_init()
 
             if not self.get_query_argument('cluster', ''):
-                self.cluster_send(self.request.body, 'sub')
+                self.cluster_send_post(self.request.body, 'sub')
 
             ret, errmsg = sub(identity, channel, occupy)
             data = {}
@@ -320,12 +335,12 @@ class SubChannelHandler(SubWebHandler):
                 data['status'] = 1
                 data['msg'] = errmsg
 
-            self.sub_return(data)
+            self.handler_return(data)
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
 
-class UnSubChannelHandler(SubWebHandler):
+class UnSubChannelHandler(ClusterWebHandler):
 
     @tornado.web.asynchronous
     def post(self):
@@ -339,7 +354,7 @@ class UnSubChannelHandler(SubWebHandler):
             self.cluster_init()
 
             if not self.get_query_argument('cluster', ''):
-                self.cluster_send(self.request.body, 'unsub')
+                self.cluster_send_post(self.request.body, 'unsub')
 
             ret, errmsg = unsub(identity, channel)
             data = {}
@@ -349,7 +364,7 @@ class UnSubChannelHandler(SubWebHandler):
                 data['status'] = 1
                 data['msg'] = errmsg
 
-            self.sub_return(data)
+            self.handler_return(data)
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 

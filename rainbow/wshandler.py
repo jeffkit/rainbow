@@ -176,7 +176,6 @@ class Packet(object):
                     self.PACKET_REL,
                     self.PACKET_COM]:
                 self._valid = False
-                # log.error(u' 心跳吗 return')
                 return
             log.debug('Packet __init__ command = ')
             log.debug(command)
@@ -743,6 +742,9 @@ class WebSocketHandler(Handler):
                 except Exception, e:
                     log.warning(e)
                     log.warning(traceback.format_exc())
+                    self.set_status(503)
+                    self.finish('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+                    return
             if not connect_flag:
                 log.warning('invalid request, close!')
                 self.set_status(401)
@@ -817,7 +819,7 @@ class WebSocketHandler(Handler):
         if req_headers.get('Origin') is not None:
             del req_headers['Origin']
         if req_headers.get('Host') is not None:
-            del req_headers['Host']  # Host 是坏人，会导致nginx502和599
+            del req_headers['Host']  # Host 是坏人，会导致nginx502
 
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=req_headers)
@@ -913,3 +915,17 @@ def unsub(identity, channel):
     if wshandler:
         wshandler.channel_remove(channel)
     return True, None
+
+
+def serverinfo():
+    host = g_CONFIG['local_ip']
+    port = g_CONFIG['socket_port']
+    server = '%s:%s' % (host, port)
+    data = {'server': server}
+    data['channels_cnt'] = len(WebSocketHandler.socket_handlers2)
+    data['channels'] = []
+    for channel, identitys in WebSocketHandler.socket_handlers2.iteritems():
+        data['channels'].append((channel, len(identitys)))
+
+    log.debug('data = %s' % data)
+    return data

@@ -63,7 +63,7 @@ def init_config():
     g_CONFIG['httphost'] = options.httphost
     g_CONFIG['requestcnt'] = options.requestcnt
     g_CONFIG['channelcnt'] = options.channelcnt
-    g_CONFIG['qos'] = options.qos
+    g_CONFIG['qos'] = options.qos or 0
 
     log.info(g_CONFIG)
     return True

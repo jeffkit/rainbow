@@ -65,15 +65,18 @@ class ServerInfoHandler(ClusterWebHandler):
         if self.server_rsp_cnt == self.server_cnt:
             self.send_finish()
 
+    def sort_by_host(self, item):
+        log.debug(item)
+        return item['server']
+
     def send_finish(self):
         log.debug('self.data = %s' % self.data)
         try:
             if self.cluster:
                 self.finish(json.dumps(self.data))
             else:
-                servers = []
-                for server in self.data['serverinfo']:
-                    servers.append(server['server'])
-                self.render('serverinfo.html', data=self.data, servers=servers)
+                self.data['serverinfo'] = sorted(
+                    self.data['serverinfo'], key=self.sort_by_host)
+                self.render('serverinfo.html', data=self.data)
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())

@@ -917,6 +917,10 @@ def unsub(identity, channel):
     return True, None
 
 
+def sort_by_channel(item):
+    return item[0]
+
+
 def serverinfo():
     host = g_CONFIG['local_ip']
     port = g_CONFIG['socket_port']
@@ -926,6 +930,8 @@ def serverinfo():
     data['channels'] = []
     for channel, identitys in WebSocketHandler.socket_handlers2.iteritems():
         data['channels'].append((channel, len(identitys)))
+
+    data['channels'] = sorted(data['channels'], key=sort_by_channel)
 
     log.debug('data = %s' % data)
     return data

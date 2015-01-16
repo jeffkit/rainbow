@@ -14,7 +14,7 @@ from wshandler import serverinfo
 
 def process_info():
     pid = os.getpid()
-    ps_command = "ps aux | awk '$2==%d'" % pid
+    ps_command = "/bin/ps aux | /usr/bin/awk '$2==%d'" % pid
     log.info(ps_command)
     log.info(commands.getstatusoutput(ps_command))
     log.info(os.environ)

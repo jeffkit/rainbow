@@ -17,6 +17,7 @@ def process_info():
     ps_command = "ps aux | awk '$2==%d'" % pid
     log.info(ps_command)
     log.info(commands.getstatusoutput(ps_command))
+    log.info(os.environ)
     l = commands.getstatusoutput(ps_command)[1].split()
     log.info(l)
     info = {'user': l[0],

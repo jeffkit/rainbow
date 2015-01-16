@@ -15,6 +15,7 @@ from wshandler import serverinfo
 def process_info():
     pid = os.getpid()
     l = commands.getstatusoutput("ps aux | awk '$2==%d'" % pid)[1].split()
+    log.info(l)
     info = {'user': l[0],
             'pid': l[1],
             'cpu': l[2],

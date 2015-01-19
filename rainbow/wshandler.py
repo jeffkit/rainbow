@@ -922,6 +922,10 @@ def sort_by_channel(item):
 
 
 def serverinfo():
+    log.debug('g_channel_msgid = %s' % g_channel_msgid)
+    log.debug('g_channel_msgid_hdl = %s' % g_channel_msgid_hdl)
+    log.debug('g_identity_wshandler = %s' % g_identity_wshandler)
+    log.debug('socket_handlers2 = %s' % WebSocketHandler.socket_handlers2)
     host = g_CONFIG['local_ip']
     port = g_CONFIG['socket_port']
     server = '%s:%s' % (host, port)

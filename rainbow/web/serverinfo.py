@@ -5,9 +5,9 @@ import logging as log
 import json
 import commands
 import os
-# import re
 
 import tornado
+
 from webhandler import ClusterWebHandler
 from wshandler import serverinfo
 
@@ -16,7 +16,11 @@ def process_info():
     pid = os.getpid()
     ps_command = "/bin/ps aux | /usr/bin/awk '$2==%d'" % pid
     log.info(ps_command)
-    l = commands.getstatusoutput(ps_command)[1].split()
+    l = commands.getstatusoutput(ps_command)
+    log.info(l)
+    l = l[1]
+    log.info(l)
+    l = l.split()
     log.info(l)
     info = {'user': l[0],
             'pid': l[1],
@@ -66,7 +70,6 @@ class ServerInfoHandler(ClusterWebHandler):
             self.send_finish()
 
     def sort_by_host(self, item):
-        log.debug(item)
         return item['server']
 
     def send_finish(self):

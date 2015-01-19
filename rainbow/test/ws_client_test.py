@@ -147,12 +147,6 @@ class websocket_test(object):
             if not msg:
                 break
             self.msg_handler(msg)
-            ret = random.randint(1, 4)
-            if ret <= 1:
-                p = Packet(
-                    command=1, msgtype=1, data='Hello, World',
-                    qos=ret, dup=0, message_id=self.get_next_messageid())
-                self.ws.send_binary(p.raw)
 
         self.ws.close()
 
@@ -195,7 +189,7 @@ def main():
 
     for channel in range(0, g_CONFIG['channelcnt']):
         for i in range(0, g_CONFIG['linkcnt']):
-            time.sleep(0.02)
+            time.sleep(0.1)
             thread.start_new_thread(run_client, (channel,))
 
     while True:

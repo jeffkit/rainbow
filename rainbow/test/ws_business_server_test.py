@@ -73,18 +73,19 @@ def _run_request(channel):
     params = param_signature()
     params['channel'] = '%d' % channel
     params['qos'] = g_CONFIG['qos']
-    params['timeout'] = 4
+    params['timeout'] = 120
     param_str = urllib.urlencode(params)
     url = 'http://%s/send/?%s' % (g_CONFIG['httphost'], param_str)
     body = 'message from business server'
     req = HTTPRequest(
         url=url, method='POST', body=body,
-        connect_timeout=10, request_timeout=10)
+        connect_timeout=120, request_timeout=120)
     try:
         timebegin = time.time()
-        HTTPClient().fetch(req)
+        rsp = HTTPClient().fetch(req)
         timelast = ((time.time() - timebegin) * 1000)
         log.info('%s %dms' % (url, timelast))
+        log.info('rsp body = %s' % rsp.body)
     except Exception, e:
         log.error(e)
         log.error(traceback.format_exc())

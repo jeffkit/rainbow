@@ -1,0 +1,21 @@
+<html>
+   <head>
+      <title>rainbow</title>
+   </head>
+   <body>
+     <ul>
+        {% for server in data['serverinfo'] %}
+        <li>{{server['server']}}  channel 数 = {{server['channels_cnt']}} cpu = {{server['process']['cpu']}} mem = {{server['process']['mem']}}
+            <ul>
+                {% for channel in server['channels'] %}
+                    <li>
+                        channel {{channel[0]}} 连接数: {{channel[1]}} 
+                    </li>
+                {% end %}
+            </ul>
+        </li>
+        {% end %}
+     </ul>
+   </body>
+ </html>
+

@@ -126,10 +126,10 @@ def send_msg_response(channel, packet_msg_id, ws_handler, data=None, error=''):
     finish_count = len(hdl_info['finish_list'])
     rsp_count = finish_count + len(hdl_info['error_list'])
 
-    log.debug('send_msg_response error_list %d' % len(hdl_info['error_list']))
-    log.debug('send_msg_response finish_count %d' % finish_count)
-    log.debug('send_msg_response rsp_count %d' % rsp_count)
-    log.debug('send_msg_response client_count = %d' % hdl_info['client_count'])
+    log.info('send_msg_response error_list %d' % len(hdl_info['error_list']))
+    log.info('send_msg_response finish_count %d' % finish_count)
+    log.info('send_msg_response rsp_count %d' % rsp_count)
+    log.info('send_msg_response client_count = %d' % hdl_info['client_count'])
     if rsp_count == hdl_info['client_count']:
         # 所有客户端都有返回或者超时
         if hdl_info.get('web_handle_response'):
@@ -176,7 +176,6 @@ class Packet(object):
                     self.PACKET_REL,
                     self.PACKET_COM]:
                 self._valid = False
-                # log.error(u' 心跳吗 return')
                 return
             log.debug('Packet __init__ command = ')
             log.debug(command)
@@ -267,7 +266,7 @@ class WebSocketHandler(Handler):
         成功创建websocket连接，保存或更新用户信息。
         """
         set_identity_hdl(self.identity, self)
-        log.info('Open connection for %s finish' % self.identity)
+        log.info('Open connection finish for %s' % self.identity)
 
     def on_pong(self, data):
         log.debug('on_pong data = %s' % data)
@@ -313,7 +312,6 @@ class WebSocketHandler(Handler):
 
     def handler_init(self):
         # 每个 ws 连接也要维护 消息的 future
-        log.info('handler_init func')
         self.future_rsp_hl = {}
         self.rsp_timeout_hl = {}
         self.pendding_message_ids = []
@@ -353,8 +351,7 @@ class WebSocketHandler(Handler):
         """从handler_map移除掉handler
         """
         try:
-            log.debug('on_close will close handler for identity = %s' %
-                      self.identity)
+            log.info('on_close for identity = %s' % self.identity)
 
             try:
                 yield self.on_close_cb()
@@ -388,9 +385,9 @@ class WebSocketHandler(Handler):
         cls, channel, msgtype, data,
             qos=0, timeout=0, web_handle_response=None):
         handlers = WebSocketHandler.socket_handlers2.get(channel, None)
-        log.debug('send_message WebSocketHandler.socket_handlers2 = %s' %
-                  WebSocketHandler.socket_handlers2)
-        log.debug('channel = %s' % channel)
+        log.info('send_message WebSocketHandler.socket_handlers2 = %s' %
+                 WebSocketHandler.socket_handlers2)
+        log.info('channel = %s' % channel)
 
         if handlers:
 
@@ -444,7 +441,7 @@ class WebSocketHandler(Handler):
                           channel, message_id_channel, message_id))
 
             def handle_future(future):
-                log.info('send_packet handle_future func')
+                log.debug('send_packet handle_future func')
                 packet = None
                 exception = ''
                 try:
@@ -540,8 +537,8 @@ class WebSocketHandler(Handler):
                 except Exception, e:
                     if packet.qos == 2:
                         self.received_message_ids.remove(packet.message_id)
-                    log.warning(e)
-                    log.warning(traceback.format_exc())
+                    log.info(e)
+                    log.info(traceback.format_exc())
                     if settings.DEBUG:
                         data = traceback.format_exc()
                     else:
@@ -559,8 +556,8 @@ class WebSocketHandler(Handler):
             self.write_message(rp.raw, binary=True)
 
         except Exception, e:
-            log.warning(e)
-            log.warning(traceback.format_exc())
+            log.info(e)
+            log.info(traceback.format_exc())
 
     # 服务器主动发消息的返回
     def on_packet_ack(self, packet):
@@ -657,9 +654,9 @@ class WebSocketHandler(Handler):
             try:
                 self.write_message(dup_packet.raw, binary=True)
             except Exception, e:
-                log.warning(u'发消息前, 客户端关闭了WebSocketClosedError')
-                log.warning(e)
-                log.warning(traceback.format_exc())
+                log.info(u'发消息前, 客户端关闭了WebSocketClosedError')
+                log.info(e)
+                log.info(traceback.format_exc())
 
     @classmethod
     def shutdown(cls):
@@ -745,6 +742,9 @@ class WebSocketHandler(Handler):
                 except Exception, e:
                     log.warning(e)
                     log.warning(traceback.format_exc())
+                    self.set_status(503)
+                    self.finish('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+                    return
             if not connect_flag:
                 log.warning('invalid request, close!')
                 self.set_status(401)
@@ -819,7 +819,7 @@ class WebSocketHandler(Handler):
         if req_headers.get('Origin') is not None:
             del req_headers['Origin']
         if req_headers.get('Host') is not None:
-            del req_headers['Host']  # Host 是坏人，会导致nginx502和599
+            del req_headers['Host']  # Host 是坏人，会导致nginx502
 
         req = self.make_request(
             g_CONFIG['connect_url'], 'GET', headers=req_headers)
@@ -915,3 +915,27 @@ def unsub(identity, channel):
     if wshandler:
         wshandler.channel_remove(channel)
     return True, None
+
+
+def sort_by_channel(item):
+    return item[0]
+
+
+def serverinfo():
+    log.debug('g_channel_msgid = %s' % g_channel_msgid)
+    log.debug('g_channel_msgid_hdl = %s' % g_channel_msgid_hdl)
+    log.debug('g_identity_wshandler = %s' % g_identity_wshandler)
+    log.debug('socket_handlers2 = %s' % WebSocketHandler.socket_handlers2)
+    host = g_CONFIG['local_ip']
+    port = g_CONFIG['socket_port']
+    server = '%s:%s' % (host, port)
+    data = {'server': server}
+    data['channels_cnt'] = len(WebSocketHandler.socket_handlers2)
+    data['channels'] = []
+    for channel, identitys in WebSocketHandler.socket_handlers2.iteritems():
+        data['channels'].append((channel, len(identitys)))
+
+    data['channels'] = sorted(data['channels'], key=sort_by_channel)
+
+    log.debug('data = %s' % data)
+    return data

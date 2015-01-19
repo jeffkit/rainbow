@@ -1,14 +1,9 @@
 # encoding=utf-8
-import ConfigParser
-from optparse import OptionParser
+
 import signal
 import time
 import settings
 import logging as log
-log.basicConfig(level=settings.LOG_LEVEL, format=settings.LOG_FORMAT)
-import traceback
-import json
-import socket
 import thread
 
 import tornado.web
@@ -20,47 +15,13 @@ from webhandler import SendMessageHandler
 from webhandler import SubChannelHandler
 from webhandler import UnSubChannelHandler
 from webhandler import HelloHandler
+from web.serverinfo import ServerInfoHandler
 from discover import broadcast_online, broadcast_offline
 from discover import udp_listen
-
+from api import init_config
 
 from config import g_CONFIG
 
-
-def init_config():
-    parser = OptionParser()
-    parser.add_option("-f", "--file", dest="config_filename", type="string")
-    parser.add_option("-p", "--port", dest="port", type="string")
-    options, args = parser.parse_args()
-    if not getattr(options, 'config_filename', None):
-        log.error('miss -f')
-        return False
-    if not getattr(options, 'port', None):
-        log.error('miss -p')
-        return False
-    config_filename = options.config_filename
-    port = options.port
-
-    try:
-        config = ConfigParser.SafeConfigParser()
-        config.read(config_filename)
-        g_CONFIG['connect_url'] = config.get("main", "connect_url")
-        # g_CONFIG['socket_port'] = int(config.get("main", "socket_port"))
-        # g_CONFIG['http_port'] = config.get("main", "http_port")
-        g_CONFIG['security_token'] = config.get("main", "security_token")
-        g_CONFIG['forward_url'] = config.get("main", "forward_url")
-        g_CONFIG['close_url'] = config.get("main", "close_url")
-        g_CONFIG['udp_ports'] = json.loads(config.get("main", "udp_ports"))
-        g_CONFIG['local_ip'] = socket.gethostbyname(socket.gethostname())
-    except Exception, e:
-        log.error(e)
-        log.error(traceback.format_exc())
-        return False
-
-    g_CONFIG['socket_port'] = int(port)
-
-    log.info(g_CONFIG)
-    return True
 
 if settings.DEBUG:
     MAX_WAIT_SECONDS_BEFORE_SHUTDOWN = 1
@@ -76,6 +37,7 @@ application = tornado.web.Application([
     (r'/sub/', SubChannelHandler),
     (r'/unsub/', UnSubChannelHandler),
     (r'/hello/', HelloHandler),
+    (r'/serverinfo/', ServerInfoHandler),
 ])
 
 

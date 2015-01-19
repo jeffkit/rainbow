@@ -75,7 +75,9 @@ class WebHandler(tornado.web.RequestHandler):
 
     @tornado.web.asynchronous
     def prepare(self):
-        if not is_signature(self):
+        """ need_sign 要指明 False 才不做签名检查
+        """
+        if getattr(self, 'need_sign', True) and not is_signature(self):
             return error_rsp(self, 1, 'signature error')
         return super(WebHandler, self).prepare()
 
@@ -130,7 +132,7 @@ class SendMessageHandler(WebHandler):
             if not self.get_query_argument('cluster', ''):
                 self.cluster_send_message(channel, msgtype, qos, timeout, data)
 
-            log.debug('SendMessageHandler body = %s' % self.request.body)
+            log.info('SendMessageHandler body = %s' % self.request.body)
             log.debug('SendMessageHandler channel = %s' % channel)
             fetch_msg(channel, msgtype, data, qos, timeout, self.fetch_msg_cb)
 
@@ -140,33 +142,8 @@ class SendMessageHandler(WebHandler):
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
-    # def send_finish(self, response):
-    #     """发送完成了，返回数据给客户端
-    #         response = {'connections': 2, 'data': xxxx}
-    #     """
-    #     log.debug('response = %s' % response)
-    #     if getattr(self, 'timeout', None):
-    #         log.info('already timeout return')
-    #         return
-
-    #     IOLoop.current().remove_timeout(self.toh)
-
-    #     data = {'status': 0}
-    #     if self.qos > 0:
-    #         rb_connections = getattr(self, 'rb_connections', 0)
-    #         rb_data = getattr(self, 'rb_data', '')
-    #         data['connections'] = response['connections'] + rb_connections
-    #         data['data'] = response['data'] or rb_data
-    #     data = json.dumps(data)
-
-    #     log.debug('SendMessageHandler send_finish data = %s' % data)
-    #     try:
-    #         self.finish(data)
-    #     except Exception, e:
-    #         self.exception_finish(e, traceback.format_exc())
-
     def fetch_msg_cb(self, response):
-        log.debug(response)
+        log.info(response)
         self.server_rsp_cnt = self.server_rsp_cnt + 1
         if self.qos > 0:
             self.rb_connections = getattr(
@@ -191,7 +168,8 @@ class SendMessageHandler(WebHandler):
             data['connections'] = getattr(self, 'rb_connections', 0)
             data['data'] = getattr(self, 'rb_data', '')
         data = json.dumps(data)
-        log.debug('SendMessageHandler send_finish data = %s' % data)
+        log.info('SendMessageHandler body = %s' % self.request.body)
+        log.info('SendMessageHandler send_finish data = %s' % data)
         try:
             self.finish(data)
         except Exception, e:
@@ -201,6 +179,7 @@ class SendMessageHandler(WebHandler):
         # 虽然超时，但是是否能够知道有部份成功发送？
         self.timeout = True
         log.info('SendMessageHandler timeout')
+        log.info('SendMessageHandler body = %s' % self.request.body)
         try:
             self.finish(json.dumps({'status': 1, 'msg': 'timeout'}))
         except Exception, e:
@@ -217,11 +196,12 @@ class SendMessageHandler(WebHandler):
             params['timeout'] = timeout
             params['cluster'] = '1'
             params_str = urllib.urlencode(params)
-
+            log.info('params = %s' % params_str)
+            log.info('g_Online_Server_deque = %s' % g_Online_Server_deque)
             # for server in g_Online_Server_List:
             for server in g_Online_Server_deque:
                 self.server_cnt = self.server_cnt + 1
-                log.debug('self.server_cnt = %d' % self.server_cnt)
+                log.info('self.server_cnt = %d' % self.server_cnt)
                 url = '%s/send/?%s' % (server, params_str)
                 req = HTTPRequest(
                     url=url, method='POST', body=body,
@@ -233,7 +213,7 @@ class SendMessageHandler(WebHandler):
             log.warning(traceback.format_exc())
 
     def cluster_send_msg_cb(self, rsp):
-        log.debug('')
+        log.info('')
         self.server_rsp_cnt = self.server_rsp_cnt + 1
         # 集群的其它 server 返回
         if rsp.error:
@@ -251,7 +231,83 @@ class SendMessageHandler(WebHandler):
             self.send_finish()
 
 
-class SubChannelHandler(WebHandler):
+class ClusterWebHandler(WebHandler):
+    """ 1.对集群各server 发消息前, 首先调用 cluster_init
+        2.对集群发送消息
+        if not self.get_query_argument('cluster', ''):
+            self.cluster_send_post(self.request.body, 'sub')
+        3.handler_return 处理返回的数据
+        4.send_finish 把数据返回给接口调用者
+    """
+
+    def cluster_init(self):
+        self.server_cnt = 1
+        self.server_rsp_cnt = 0
+        self.status = 1
+
+    def cluster_send_cb(self, rsp):
+        log.debug('')
+        # 集群的其它 server 返回
+        if rsp.error:
+            log.warning('rsp.error = %s' % rsp.error)
+            data = {'status': 1, 'msg': rsp.error}
+        else:
+            log.debug('rsp.body = %s' % rsp.body)
+            data = json.loads(rsp.body)
+
+        self.handler_return(data)
+
+    def handler_return(self, data):
+        log.debug('ClusterWebHandler data = %s' % data)
+        self.server_rsp_cnt = self.server_rsp_cnt + 1
+        if data['status'] == 0:
+            self.status = 0
+        else:
+            self.msg = data['msg']
+
+        if self.server_rsp_cnt == self.server_cnt:
+            self.send_finish()
+
+    def send_finish(self):
+        data = {'status': self.status}
+        if self.status == 1:
+            data['msg'] = self.msg
+        data = json.dumps(data)
+        log.info('data = %s' % data)
+        try:
+            self.finish(data)
+        except Exception, e:
+            self.exception_finish(e, traceback.format_exc())
+
+    def cluster_send_post(self, body, uri):
+        self.cluster_send(uri, method='POST', body=body)
+
+    def cluster_send_get(self, uri):
+        self.cluster_send(uri, method='GET')
+
+    def cluster_send(self, uri, method, body=None):
+        self.status = 1
+        self.msg = ''
+        try:
+            params = param_signature()
+            params['cluster'] = '1'
+            params_str = urllib.urlencode(params)
+
+            for server in g_Online_Server_deque:
+                self.server_cnt = self.server_cnt + 1
+                log.debug('self.server_cnt = %d' % self.server_cnt)
+                url = '%s/%s/?%s' % (server, uri, params_str)
+                req = HTTPRequest(
+                    url=url, method=method, body=body,
+                    connect_timeout=5, request_timeout=5)
+                http_client = AsyncHTTPClient()
+                http_client.fetch(req, self.cluster_send_cb)
+        except Exception, e:
+            log.warning(e)
+            log.warning(traceback.format_exc())
+
+
+class SubChannelHandler(ClusterWebHandler):
 
     @tornado.web.asynchronous
     def post(self):
@@ -266,6 +322,11 @@ class SubChannelHandler(WebHandler):
             if not identity or not channel:
                 return error_rsp(self, 1, 'params error')
 
+            self.cluster_init()
+
+            if not self.get_query_argument('cluster', ''):
+                self.cluster_send_post(self.request.body, 'sub')
+
             ret, errmsg = sub(identity, channel, occupy)
             data = {}
             if ret:
@@ -274,13 +335,12 @@ class SubChannelHandler(WebHandler):
                 data['status'] = 1
                 data['msg'] = errmsg
 
-            log.debug('SubChannelHandler rsp data = %s' % data)
-            self.finish(json.dumps(data))
+            self.handler_return(data)
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
 
-class UnSubChannelHandler(WebHandler):
+class UnSubChannelHandler(ClusterWebHandler):
 
     @tornado.web.asynchronous
     def post(self):
@@ -291,6 +351,11 @@ class UnSubChannelHandler(WebHandler):
             if not identity or not channel:
                 return error_rsp(self, 1, 'params error')
 
+            self.cluster_init()
+
+            if not self.get_query_argument('cluster', ''):
+                self.cluster_send_post(self.request.body, 'unsub')
+
             ret, errmsg = unsub(identity, channel)
             data = {}
             if ret:
@@ -299,8 +364,7 @@ class UnSubChannelHandler(WebHandler):
                 data['status'] = 1
                 data['msg'] = errmsg
 
-            log.debug('SubChannelHandler rsp data = %s' % data)
-            self.finish(json.dumps(data))
+            self.handler_return(data)
         except Exception, e:
             self.exception_finish(e, traceback.format_exc())
 
